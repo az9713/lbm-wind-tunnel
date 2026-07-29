@@ -48,7 +48,7 @@ class Solver:
     body force (velocity-shift forcing), and inlet/outlet open BCs."""
 
     def __init__(self, lat, shape, tau, u_init=None, solid=None, force=None,
-                 inlet_u=None, dtype=np.float64):
+                 inlet_u=None, wall_u=None, dtype=np.float64):
         self.lat, self.tau = lat, tau
         self.shape = shape
         self.solid = solid
@@ -62,7 +62,9 @@ class Solver:
             u = np.asarray(u_init, dtype=dtype)
         self.f = equilibrium(lat, rho, u).astype(dtype)
         # boundary links for half-way bounce-back: (q, opp_q, fluid cells with
-        # a solid neighbor along c_q)
+        # a solid neighbor along c_q, moving-wall correction or 0)
+        # wall_u: optional (dim, *shape) velocity of each solid cell — a moving
+        # road under the cars; correction -6 w_q rho (c_q . u_wall).
         self.links = []
         if solid is not None:
             dim = lat.c.shape[1]
@@ -72,7 +74,13 @@ class Solver:
                 neighbor = np.roll(solid, shift=tuple(-ci), axis=tuple(range(dim)))
                 mask = (~solid) & neighbor
                 if mask.any():
-                    self.links.append((q, int(lat.opp[q]), np.nonzero(mask)))
+                    idx = np.nonzero(mask)
+                    corr = 0.0
+                    if wall_u is not None:
+                        nb = tuple((idx[a] + ci[a]) % shape[a] for a in range(dim))
+                        cu = sum(ci[a] * wall_u[(a,) + nb] for a in range(dim))
+                        corr = (6.0 * lat.w[q] * cu).astype(dtype)
+                    self.links.append((q, int(lat.opp[q]), idx, corr))
 
     def rho(self):
         return self.f.sum(0)
@@ -99,8 +107,8 @@ class Solver:
         # cell; populations reflect at the fluid boundary cell, so solid-cell
         # contents never matter and the exact momentum-exchange force is
         # F = 2 * sum_links c_q * f[opp_q] on the post-stream state.
-        for q, oq, idx in self.links:
-            fnew[(oq,) + idx] = fpost[(q,) + idx]
+        for q, oq, idx, corr in self.links:
+            fnew[(oq,) + idx] = fpost[(q,) + idx] - corr
         if self.inlet_u is not None:
             self._open_bcs(fnew)
         self.f = fnew

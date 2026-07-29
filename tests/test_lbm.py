@@ -135,6 +135,32 @@ def test_render_2d_makes_mp4(tmp_path):
     assert out.stat().st_size > 10_000
 
 
+def test_couette_moving_wall():
+    # top wall slides at U -> linear profile (validates moving-wall bounce-back)
+    nx, ny, tau, U = 8, 33, 0.8, 0.05
+    solid = np.zeros((nx, ny), bool); solid[:, 0] = solid[:, -1] = True
+    wu = np.zeros((2, nx, ny)); wu[0, :, -1] = U
+    s = Solver(D2Q9, (nx, ny), tau, solid=solid, wall_u=wu)
+    for _ in range(6000): s.step()
+    ux = s.velocity()[0, 0, 1:-1]
+    y = np.arange(1, ny - 1)
+    ana = U * (y - 0.5) / (ny - 2)        # walls at y=0.5 and y=ny-1.5
+    assert np.allclose(ux, ana, atol=0.02 * U)
+
+
+def test_two_body_link_partition():
+    # per-body momentum-exchange links must partition the total exactly
+    from diagnostics import MomentumExchange
+    a = np.zeros((40, 20), bool); a[10:14, 8:12] = True
+    b = np.zeros((40, 20), bool); b[17:21, 8:12] = True    # 3-cell gap
+    solid = a | b
+    n_all = sum(len(i[0]) for _, i in MomentumExchange(D2Q9, solid).links)
+    n_a = sum(len(i[0]) for _, i in MomentumExchange(D2Q9, solid, body=a).links)
+    n_b = sum(len(i[0]) for _, i in MomentumExchange(D2Q9, solid, body=b).links)
+    assert n_a + n_b == n_all
+    assert n_a == n_b > 0
+
+
 @pytest.mark.slow
 def test_cylinder_re100_strouhal():
     from run_cylinder2d import run_re100
