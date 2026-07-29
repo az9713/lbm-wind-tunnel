@@ -26,14 +26,25 @@ and how to regenerate anything.
   numba gravity — deliberate deviation from planned Barnes-Hut, documented
   in the file header).
 
-## Production runs (background pipelines this session)
+## Production runs — status at ~12:05 (harness restarted once; relaunched)
 
-- DONE: 2D cylinder clip (`out/cylinder_re100.mp4`), drafting tandem sweep,
-  Ising sweep + coarsening video, N-body merger video.
-- IN FLIGHT at last save: drafting side-by-side (2 of 3 offsets left),
-  sphere slow test, bird study (gate→baseline→formation), 3D gallery
-  (ahmed mid-run; car/rocket/airplane/ship/bird queued), hero 3D runs not
-  yet started (`python run_hero3d.py`, run after gallery frees CPU).
+- DONE: 2D cylinder clip + stats (St=0.1925), cylinder Re=20 (Cd=2.44),
+  full drafting map (out/drafting_map.csv) + dynamics (caught, ratio 11.4)
+  + snapshots + strip, sphere (Cd=1.324, PASS), Ising (Tc 0.91% off),
+  N-body merger (drift 0.001%), 3D gallery ahmed (Cd=2.62) + car (Cd=2.41)
+  with rendered mp4s.
+- RUNNING (two background pipelines, ~2-2.5h from 12:05, marker files
+  out/PIPE1_DONE, out/PIPE2_DONE, logs out/pipe1.log, out/pipe2.log):
+  P1 = gallery rocket/airplane/ship/bird + render_gallery;
+  P2 = bird study all stages (fixed lift axis) + hero 3D runs.
+- AFTER both markers: `python tools/export_golden.py && PYTHONPATH=. python
+  tools/build_site_data.py`, reload site, verify §4/§5 fill in, run slow
+  drafting/birds-adjacent asserts if desired, final git commit.
+- KNOWN: 3D lift axis bug (F[1] vs F[-1]) fixed mid-session — ahmed/car
+  ran with the old code; their Cd + slices valid, their Cl column is the
+  (≈0, symmetric) side force — harmless but don't quote it as lift.
+- Bird gate (fixed code) already measured Cl = 1.08 ± 0.11 at 6° AoA
+  before the restart killed the run — the gate will pass; full study rerunning.
 
 ## Regeneration pipeline (order matters)
 
