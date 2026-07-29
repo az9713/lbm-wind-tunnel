@@ -785,6 +785,14 @@
         <div class="figcap"><b>Fig. 6 — Side-by-side.</b> Lateral (side) force
         on each car vs offset — the force grows as the cars close in.</div></div>`;
     }
+    if ((DATA.images || []).includes("drafting_strip.png")) {
+      html += `<figure class="figure"><img src="media/drafting_strip.png"
+        alt="Gap versus time from the ODE, with measured vorticity fields at three marked gaps"
+        style="width:100%;display:block">
+        <figcaption><b>Fig. 7 — The maneuver, stitched to its flow fields.</b>
+        Marked points on the gap(t) curve pair with the measured wake at that
+        gap. Quasi-static validity: the printed timescale ratio.</figcaption></figure>`;
+    }
     el.innerHTML = html;
     lineChart($("chart-map"), {
       yLabel: "Cd", xLabel: "gap (car lengths)", yZero: false,
