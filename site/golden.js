@@ -30,8 +30,8 @@ window.GOLDEN = {
    0.14,
    0.2
   ],
-  "pythonSt": null,
-  "pythonCd": null,
+  "pythonSt": 0.1925,
+  "pythonCd": 1.4575702485159943,
   "blockage": 0.1375
  }
 };

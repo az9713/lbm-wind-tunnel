@@ -90,14 +90,14 @@ const SelfCheck = (() => {
       for (let s = 0; s < chunk; s++) {
         eng.step(1);
         const tt = t + s;
-        if (tt >= warmup) {
-          if (eng.syncForces) eng.syncForces();   // GPU: force pass + readback
+        if (tt >= warmup && (tt & 1) === 0) {   // every 2nd step (Nyquist-safe:
+          if (eng.syncForces) eng.syncForces(); // shedding period ~100 steps)
           cl.push(eng.bodyForce(2).fy);
         }
       }
       if (progress) { progress(t / steps); await yieldUI(); }
     }
-    const st = dominantFreq(cl) * Deff / U;
+    const st = dominantFreq(cl) / 2 * Deff / U;   // dt = 2 steps per sample
     return {
       name: "Cylinder Re=100 Strouhal",
       measured: st, target: p.pythonSt ?? 0.165,
@@ -134,9 +134,23 @@ const SelfCheck = (() => {
     return bestK / n;
   }
 
+  // MessageChannel yield: unlike setTimeout it is NOT subject to Chrome's
+  // hidden-tab intensive timer throttling (1 timer/min), which would turn a
+  // 2-minute check into hours when the window is occluded.
+  const _mc = (typeof MessageChannel !== "undefined") ? new MessageChannel() : null;
+  const _waiters = [];
+  if (_mc) {
+    _mc.port1.onmessage = () => {
+      const r = _waiters.shift();
+      if (r) r();
+    };
+  }
   function yieldUI() {
-    return (typeof requestAnimationFrame !== "undefined")
-      ? new Promise(r => setTimeout(r, 0)) : Promise.resolve();
+    if (!_mc) return Promise.resolve();
+    return new Promise(r => {
+      _waiters.push(r);
+      _mc.port2.postMessage(0);
+    });
   }
 
   return { taylorGreen, poiseuille, strouhal };

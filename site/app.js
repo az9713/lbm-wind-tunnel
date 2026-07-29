@@ -731,6 +731,8 @@
         const bt = $(`bt-${c.key}`), st = $(`st-${c.key}`), pr = $(`pr-${c.key}`);
         bt.disabled = true; pr.hidden = false;
         st.className = "status idle"; st.textContent = "running…";
+        const wasPaused = state.paused;
+        state.paused = true;               // free GPU + main thread for the check
         try {
           const r = await c.run(p => pr.value = p);
           liveCheckResults[c.key] = r;
@@ -743,6 +745,7 @@
         } catch (e) {
           st.className = "status fail"; st.textContent = "error: " + e.message;
         }
+        state.paused = wasPaused;
         bt.disabled = false; pr.hidden = true;
       });
     }
