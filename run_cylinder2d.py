@@ -24,18 +24,27 @@ def make_sim(nx, ny, D, U, Re):
     return s, diag
 
 
-def run_re100(nx=400, ny=160, D=20, U=0.08, steps=30000, warmup=10000):
+def run_re100(nx=400, ny=160, D=20, U=0.08, steps=30000, warmup=10000,
+              clip_path=None, clip_every=30):
     """Vortex street: returns dict with Strouhal number and force stats.
-    U=0.08 keeps tau clear of the 0.5 stability edge at Re=100."""
+    U=0.08 keeps tau clear of the 0.5 stability edge at Re=100.
+    clip_path: also render a vorticity mp4 from the post-warmup frames."""
     from diagnostics import strouhal
     s, diag = make_sim(nx, ny, D, U, Re=100)
-    cds, cls = [], []
+    cds, cls, fields = [], [], []
     for i in range(steps):
         s.inlet_uy = 0.05 * U if i < 1000 else 0.0   # deterministic shedding seed
         s.step()
         if i >= warmup:
             cd, cl = diag.coefficients(s)
             cds.append(cd); cls.append(cl)
+            if clip_path and (i - warmup) % clip_every == 0:
+                from viz import vorticity
+                fields.append(vorticity(s.velocity()))
+    if clip_path and fields:
+        from viz import render_2d
+        clim = 3 * float(np.std(fields[-1]))
+        render_2d(fields, clip_path, solid=s.solid, clim=(-clim, clim))
     return {
         "St": strouhal(cls, diag.D_eff, U),
         "Cd_mean": float(np.mean(cds)), "Cd_std": float(np.std(cds)),
@@ -44,25 +53,15 @@ def run_re100(nx=400, ny=160, D=20, U=0.08, steps=30000, warmup=10000):
     }
 
 
-def render_re100_clip(path="out/cylinder_re100.mp4", nx=400, ny=160, D=20,
-                      U=0.08, steps=30000, record_from=12000, every=30):
-    """20 s vortex-street clip: 600 vorticity frames at 30 fps."""
-    from viz import render_2d, vorticity
-    s, diag = make_sim(nx, ny, D, U, Re=100)
-    fields = []
-    for i in range(steps):
-        s.inlet_uy = 0.05 * U if i < 1000 else 0.0
-        s.step()
-        if i >= record_from and (i - record_from) % every == 0:
-            fields.append(vorticity(s.velocity()))
-    clim = 3 * np.std(fields[-1])
-    return render_2d(fields, path, solid=s.solid, clim=(-clim, clim))
-
-
 if __name__ == "__main__":
     import sys
     if "clip" in sys.argv:
-        print(render_re100_clip())
+        import json
+        from pathlib import Path
+        Path("out").mkdir(exist_ok=True)
+        r = run_re100(clip_path="out/cylinder_re100.mp4")
+        json.dump(r, open("out/results2d.json", "w"), indent=1)
+        print(r)
     else:
         s, diag = make_sim(nx=400, ny=160, D=20, U=0.05, Re=20)
         for i in range(4000):
