@@ -437,6 +437,9 @@
 
   let gaugeTick = 0;
   function frame() {
+    // idle when the page is hidden/occluded: stepping an invisible sim just
+    // queues GPU work nobody sees (and can congest the GPU process)
+    if (document.hidden && !window.__lab_force_run) return;
     if (!state.paused) {
       const tA = performance.now();
       state.eng.step(state.stepsPerFrame);
