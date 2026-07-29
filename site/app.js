@@ -529,8 +529,45 @@
     }
     g += `<text class="tick" x="${mL}" y="${mT}" text-anchor="start">${yLabel}</text>`;
     if (xLabel) g += `<text class="tick" x="${(W + mL) / 2}" y="${H - 20}" text-anchor="middle">${xLabel}</text>`;
+    g += `<circle class="hoverdot" r="4" fill="none" stroke="#141a1e" stroke-width="1.5" opacity="0"/>`;
     g += `</svg>`;
     el.innerHTML = g;
+    // hover layer: nearest-point tooltip (dataviz interaction rule)
+    const svg = el.querySelector("svg");
+    let tip = el.querySelector(".charttip");
+    if (!tip) {
+      tip = document.createElement("div");
+      tip.className = "charttip";
+      tip.style.cssText = "position:absolute;pointer-events:none;background:#141a1e;" +
+        "color:#fcfcfb;font:11.5px var(--mono);padding:3px 7px;opacity:0;z-index:5";
+      el.style.position = "relative";
+      el.appendChild(tip);
+    }
+    const dot = svg.querySelector(".hoverdot");
+    svg.addEventListener("mousemove", ev => {
+      const r = svg.getBoundingClientRect();
+      const mx = (ev.clientX - r.left) / r.width * W;
+      const my = (ev.clientY - r.top) / r.height * H;
+      let best = null, bd = 1e9;
+      for (const s of series) {
+        for (const p of s.pts) {
+          if (!isFinite(p[1])) continue;
+          const d = (sx(p[0]) - mx) ** 2 + (sy(p[1]) - my) ** 2;
+          if (d < bd) { bd = d; best = { p, s }; }
+        }
+      }
+      if (!best || bd > 2500) { tip.style.opacity = 0; dot.setAttribute("opacity", 0); return; }
+      dot.setAttribute("cx", sx(best.p[0])); dot.setAttribute("cy", sy(best.p[1]));
+      dot.setAttribute("opacity", 1);
+      tip.textContent = `${best.s.label ? best.s.label + ": " : ""}` +
+        `${fmtTick(best.p[0])}, ${best.p[1].toFixed(3)}`;
+      tip.style.left = (sx(best.p[0]) / W * 100) + "%";
+      tip.style.top = `calc(${(sy(best.p[1]) / H * 100)}% - 26px)`;
+      tip.style.opacity = 1;
+    });
+    svg.addEventListener("mouseleave", () => {
+      tip.style.opacity = 0; dot.setAttribute("opacity", 0);
+    });
   }
   function fmtTick(v) {
     const a = Math.abs(v);
