@@ -32,3 +32,15 @@ def test_taylor_green_decay():
         s.step(); e.append((s.velocity()**2).sum())
     rate = -np.polyfit(np.arange(800), np.log(e), 1)[0] / 2   # energy decays 2x faster
     assert abs(rate - 2*nu*k**2) / (2*nu*k**2) < 0.02
+
+
+def test_poiseuille_profile():
+    nx, ny, tau, g = 8, 33, 0.9, 1e-6      # g = body force in +x
+    solid = np.zeros((nx, ny), bool); solid[:, 0] = solid[:, -1] = True
+    s = Solver(D2Q9, (nx, ny), tau, solid=solid, force=(g, 0.0))
+    for _ in range(8000): s.step()
+    ux = s.velocity()[0, 0, 1:-1]
+    yc = np.arange(1, ny-1) - (ny-1)/2
+    h = (ny - 2) / 2
+    ana = 1 - (yc/h)**2
+    assert np.allclose(ux/ux.max(), ana/ana.max(), atol=0.02)
