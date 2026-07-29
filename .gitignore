@@ -1,4 +1,6 @@
 .ignore/
 __pycache__/
+*.pyc
 out/
+!out/.gitkeep
 .venv/
