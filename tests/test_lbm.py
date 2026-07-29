@@ -1,5 +1,5 @@
 import numpy as np
-from lbm import D2Q9, equilibrium, stream
+from lbm import D2Q9, Solver, equilibrium, stream
 
 
 def test_equilibrium_moments_d2q9():
@@ -18,3 +18,17 @@ def test_streaming_conserves_mass_and_shifts():
     f2 = stream(D2Q9, f)
     assert f2.sum() == f.sum()
     assert f2[1, 9, 8] == 1.0                      # moved +x by 1
+
+
+def test_taylor_green_decay():
+    n, tau, u0 = 64, 0.8, 0.03
+    nu = (tau - 0.5) / 3
+    k = 2*np.pi/n
+    x, y = np.meshgrid(np.arange(n), np.arange(n), indexing='ij')
+    u = np.stack([u0*np.cos(k*x)*np.sin(k*y), -u0*np.sin(k*x)*np.cos(k*y)])
+    s = Solver(D2Q9, (n, n), tau, u_init=u)
+    e = []
+    for t in range(800):
+        s.step(); e.append((s.velocity()**2).sum())
+    rate = -np.polyfit(np.arange(800), np.log(e), 1)[0] / 2   # energy decays 2x faster
+    assert abs(rate - 2*nu*k**2) / (2*nu*k**2) < 0.02

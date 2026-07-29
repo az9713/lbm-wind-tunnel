@@ -33,3 +33,59 @@ def stream(lat, f):
     for q, ci in enumerate(lat.c):
         out[q] = np.roll(f[q], shift=tuple(ci), axis=tuple(range(ci.size)))
     return out
+
+
+class Solver:
+    """BGK collide-and-stream with optional solid mask (full bounce-back),
+    body force (velocity-shift forcing), and inlet/outlet open BCs."""
+
+    def __init__(self, lat, shape, tau, u_init=None, solid=None, force=None,
+                 inlet_u=None, dtype=np.float64):
+        self.lat, self.tau = lat, tau
+        self.shape = shape
+        self.solid = solid
+        self.force = None if force is None else np.array(force, dtype=dtype)
+        self.inlet_u = None if inlet_u is None else float(inlet_u)
+        rho = np.ones(shape, dtype=dtype)
+        if u_init is None:
+            u = np.zeros((lat.c.shape[1],) + tuple(shape), dtype=dtype)
+        else:
+            u = np.asarray(u_init, dtype=dtype)
+        self.f = equilibrium(lat, rho, u).astype(dtype)
+
+    def rho(self):
+        return self.f.sum(0)
+
+    def velocity(self):
+        rho = self.rho()
+        u = np.einsum('qa,q...->a...', self.lat.c.astype(self.f.dtype), self.f) / rho
+        if self.solid is not None:
+            u[:, self.solid] = 0.0
+        return u
+
+    def step(self):
+        lat, f = self.lat, self.f
+        rho = f.sum(0)
+        u = np.einsum('qa,q...->a...', lat.c.astype(f.dtype), f) / rho
+        if self.force is not None:
+            # velocity-shift forcing: feq evaluated at u + tau*F/rho
+            # (simpler than Guo; passes Poiseuille at the 2% tolerance)
+            u = u + self.tau * self.force.reshape(-1, *([1]*rho.ndim)) / rho
+        feq = equilibrium(lat, rho, u)
+        fpost = f + (feq - f) / self.tau
+        if self.solid is not None:
+            fpost[:, self.solid] = f[:, self.solid]   # no collision in walls
+        fnew = stream(lat, fpost)
+        if self.solid is not None:
+            fnew[:, self.solid] = fnew[lat.opp][:, self.solid]  # full bounce-back
+        if self.inlet_u is not None:
+            self._open_bcs(fnew)
+        self.f = fnew
+        return self.f
+
+    def _open_bcs(self, f):
+        dim = self.lat.c.shape[1]
+        uin = np.zeros((dim, 1) + self.shape[1:], dtype=f.dtype)
+        uin[0] = self.inlet_u
+        f[:, 0] = equilibrium(self.lat, np.ones((1,) + self.shape[1:], dtype=f.dtype), uin)[:, 0]
+        f[:, -1] = f[:, -2]   # zero-gradient outlet
