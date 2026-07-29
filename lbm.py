@@ -20,6 +20,14 @@ D2Q9 = _make(
     [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (-1, -1), (1, -1)],
     [4/9] + [1/9]*4 + [1/36]*4)
 
+D3Q19 = _make(
+    [(0, 0, 0),
+     (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1),
+     (1, 1, 0), (-1, -1, 0), (1, -1, 0), (-1, 1, 0),
+     (1, 0, 1), (-1, 0, -1), (1, 0, -1), (-1, 0, 1),
+     (0, 1, 1), (0, -1, -1), (0, 1, -1), (0, -1, 1)],
+    [1/3] + [1/18]*6 + [1/36]*12)
+
 
 def equilibrium(lat, rho, u):
     # u shape: (dim, *grid); returns (Q, *grid)
@@ -46,6 +54,7 @@ class Solver:
         self.solid = solid
         self.force = None if force is None else np.array(force, dtype=dtype)
         self.inlet_u = None if inlet_u is None else float(inlet_u)
+        self.inlet_uy = 0.0   # transverse inlet component (shedding seed)
         rho = np.ones(shape, dtype=dtype)
         if u_init is None:
             u = np.zeros((lat.c.shape[1],) + tuple(shape), dtype=dtype)
@@ -100,5 +109,6 @@ class Solver:
         dim = self.lat.c.shape[1]
         uin = np.zeros((dim, 1) + self.shape[1:], dtype=f.dtype)
         uin[0] = self.inlet_u
+        uin[1] = self.inlet_uy
         f[:, 0] = equilibrium(self.lat, np.ones((1,) + self.shape[1:], dtype=f.dtype), uin)[:, 0]
         f[:, -1] = f[:, -2]   # zero-gradient outlet

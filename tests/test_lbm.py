@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from lbm import D2Q9, Solver, equilibrium, stream
 
 
@@ -76,3 +77,43 @@ def test_cylinder_re20_steady_drag():
     cd = np.mean(cds)
     assert np.std(cds) < 0.01 * cd
     assert 1.5 < cd < 3.0
+
+
+def test_equilibrium_moments_d3q19():
+    from lbm import D3Q19
+    rng = np.random.default_rng(3)
+    rho = 1 + 0.05 * rng.standard_normal((6, 6, 6))
+    u = 0.05 * rng.standard_normal((3, 6, 6, 6))
+    feq = equilibrium(D3Q19, rho, u)
+    assert np.allclose(feq.sum(0), rho, atol=1e-6)
+    mom = np.einsum('qa,qxyz->axyz', D3Q19.c.astype(float), feq)
+    assert np.allclose(mom, rho * u, atol=1e-6)
+
+
+def test_poiseuille_3d_profile():
+    # same physics as the 2D channel, on a 3D grid: proves dimension-agnosticism
+    from lbm import D3Q19
+    nx, ny, nz, tau, g = 16, 33, 8, 0.9, 1e-6
+    solid = np.zeros((nx, ny, nz), bool); solid[:, 0, :] = solid[:, -1, :] = True
+    s = Solver(D3Q19, (nx, ny, nz), tau, solid=solid, force=(g, 0.0, 0.0))
+    for _ in range(8000): s.step()
+    ux = s.velocity()[0, 0, 1:-1, 0]
+    yc = np.arange(1, ny-1) - (ny-1)/2
+    h = (ny - 2) / 2
+    ana = 1 - (yc/h)**2
+    assert np.allclose(ux/ux.max(), ana/ana.max(), atol=0.02)
+
+
+def test_render_2d_makes_mp4(tmp_path):
+    from viz import render_2d
+    rng = np.random.default_rng(2)
+    fields = [rng.standard_normal((100, 50)) for _ in range(10)]
+    out = render_2d(fields, tmp_path / "test.mp4")
+    assert out.stat().st_size > 10_000
+
+
+@pytest.mark.slow
+def test_cylinder_re100_strouhal():
+    from run_cylinder2d import run_re100
+    r = run_re100()
+    assert 0.14 < r["St"] < 0.20, r
