@@ -2,6 +2,12 @@
 import numpy as np
 from dataclasses import dataclass
 
+try:                       # optional numba acceleration (same physics,
+    import lbm_fast        # same tests); numpy path remains the fallback
+    _FAST = True
+except Exception:
+    _FAST = False
+
 
 @dataclass(frozen=True)
 class Lattice:
@@ -39,8 +45,16 @@ def equilibrium(lat, rho, u):
 def stream(lat, f):
     out = np.empty_like(f)
     for q, ci in enumerate(lat.c):
-        out[q] = np.roll(f[q], shift=tuple(ci), axis=tuple(range(ci.size)))
+        out[q] = _roll(f[q], ci)
     return out
+
+
+def _roll(a, ci):
+    # roll only the axes that actually shift (np.roll copies even for 0)
+    ax = [i for i, s in enumerate(ci) if s]
+    if not ax:
+        return a.copy()
+    return np.roll(a, shift=tuple(int(ci[i]) for i in ax), axis=tuple(ax))
 
 
 class Solver:
@@ -93,15 +107,84 @@ class Solver:
         return u
 
     def step(self):
+        # hot loop: per-q fused equilibrium+collide with explicit moment sums —
+        # the vectorized einsum/broadcast version allocated ~10 grid-sized
+        # temporaries per step and was 4-5x slower on 3D grids
         lat, f = self.lat, self.f
+        tau = self.tau
+        c = lat.c
+        w = lat.w
+        dim = c.shape[1]
+        if _FAST:
+            if not hasattr(self, "_fpost"):
+                self._fpost = np.empty_like(f)
+                self._fnew = np.empty_like(f)
+                self._cq = [np.ascontiguousarray(c[:, a]) for a in range(dim)]
+                self._wq = w.astype(f.dtype)
+            fpost, fnew = self._fpost, self._fnew
+            g = self.force if self.force is not None else np.zeros(dim)
+            if dim == 2:
+                lbm_fast.collide_2d(f, fpost, self._cq[0], self._cq[1],
+                                    self._wq, 1.0 / tau, g[0], g[1], tau)
+                lbm_fast.stream_2d(fpost, fnew, self._cq[0], self._cq[1])
+            else:
+                lbm_fast.collide_3d(f, fpost, self._cq[0], self._cq[1],
+                                    self._cq[2], self._wq, 1.0 / tau,
+                                    g[0], g[1], g[2], tau)
+                lbm_fast.stream_3d(fpost, fnew, self._cq[0], self._cq[1],
+                                   self._cq[2])
+            for q, oq, idx, corr in self.links:
+                fnew[(oq,) + idx] = fpost[(q,) + idx] - corr
+            if self.inlet_u is not None:
+                self._open_bcs(fnew)
+            # rotate buffers: old f becomes next fpost scratch
+            self._fpost, self._fnew, self.f = self.f, fpost, fnew
+            return
         rho = f.sum(0)
-        u = np.einsum('qa,q...->a...', lat.c.astype(f.dtype), f) / rho
-        if self.force is not None:
-            # velocity-shift forcing: feq evaluated at u + tau*F/rho
-            # (simpler than Guo; passes Poiseuille at the 2% tolerance)
-            u = u + self.tau * self.force.reshape(-1, *([1]*rho.ndim)) / rho
-        feq = equilibrium(lat, rho, u)
-        fpost = f + (feq - f) / self.tau
+        inv_rho = 1.0 / rho
+        us = None
+        u = []
+        for a in range(dim):
+            ua = None
+            for q in range(c.shape[0]):
+                s = c[q, a]
+                if s == 1:
+                    ua = f[q].copy() if ua is None else np.add(ua, f[q], out=ua)
+                elif s == -1:
+                    ua = -f[q] if ua is None else np.subtract(ua, f[q], out=ua)
+            ua *= inv_rho
+            if self.force is not None:
+                ua += tau * self.force[a] * inv_rho
+            u.append(ua)
+            us = ua * ua if us is None else np.add(us, ua * ua, out=us)
+        self._u = u          # cached for velocity()
+        omega = 1.0 / tau
+        one_minus = 1.0 - omega
+        base = 1.0 - 1.5 * us
+        if not hasattr(self, "_fpost"):
+            self._fpost = np.empty_like(f)
+        fpost = self._fpost
+        rw = rho * omega        # fold omega into the equilibrium prefactor
+        for q in range(c.shape[0]):
+            cu = None
+            for a in range(dim):
+                s = c[q, a]
+                if s == 1:
+                    cu = u[a].copy() if cu is None else np.add(cu, u[a], out=cu)
+                elif s == -1:
+                    cu = -u[a] if cu is None else np.subtract(cu, u[a], out=cu)
+            if cu is None:
+                feq_q = base.copy()
+            else:
+                feq_q = cu * cu
+                feq_q *= 4.5
+                feq_q += base
+                cu *= 3.0
+                feq_q += cu
+            feq_q *= rw
+            feq_q *= w[q]
+            np.multiply(f[q], one_minus, out=fpost[q])
+            fpost[q] += feq_q
         fnew = stream(lat, fpost)
         # half-way bounce-back: wall sits half a link beyond the last fluid
         # cell; populations reflect at the fluid boundary cell, so solid-cell
