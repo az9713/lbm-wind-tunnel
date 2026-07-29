@@ -152,6 +152,68 @@ void main(){
   o = vec4(fA, fB);
 }`;
 
+  // Display pass: colormap a field derived from the moments texture straight
+  // to the canvas — no CPU readback in the render loop at all.
+  const FS_DISPLAY = GLSL_COMMON + `
+uniform sampler2D uMom;
+uniform int uField;            // 0 vorticity, 1 speed, 2 pressure
+uniform float uScale;
+uniform vec3 uStops[5];
+out vec4 o;
+vec3 ramp(float t){
+  t = clamp(t, 0., 1.) * 4.;
+  int i = int(min(t, 3.));
+  return mix(uStops[i], uStops[i+1], t - float(i));
+}
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 m = texelFetch(uMom,p,0);
+  if(m.w > 0.5){
+    int id = int(m.w+0.5);
+    o = vec4(id==2 ? vec3(0.17,0.25,0.35) : id==3 ? vec3(0.35,0.24,0.14)
+                   : vec3(0.12,0.13,0.15), 1.);
+    return;
+  }
+  float v;
+  if(uField==1){ v = length(m.yz)*uScale; }
+  else if(uField==2){ v = (m.x-1.)*uScale + 0.5; }
+  else {
+    vec4 xm = texelFetch(uMom, wrapc(p+ivec2(-1,0)), 0);
+    vec4 xp = texelFetch(uMom, wrapc(p+ivec2( 1,0)), 0);
+    vec4 ym = texelFetch(uMom, wrapc(p+ivec2(0,-1)), 0);
+    vec4 yp = texelFetch(uMom, wrapc(p+ivec2(0, 1)), 0);
+    v = ((xp.z-xm.z) - (yp.y-ym.y)) * 0.5 * uScale + 0.5;
+  }
+  o = vec4(ramp(v), 1.);
+}`;
+
+  // Refill pass: cells that changed solid->fluid get equilibrium populations
+  // (the documented "pressure pop" alternative to leaving stale garbage).
+  const FS_REFILL = GLSL_COMMON + `
+uniform sampler2D uF0, uF1, uF2, uObst, uObstPrev;
+uniform vec2 uInletU;
+layout(location=0) out vec4 o0;
+layout(location=1) out vec4 o1;
+layout(location=2) out vec4 o2;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 a = texelFetch(uF0,p,0), b = texelFetch(uF1,p,0);
+  float g8 = texelFetch(uF2,p,0).x;
+  bool wasSolid = texelFetch(uObstPrev,p,0).x > 0.5;
+  bool nowFluid = texelFetch(uObst,p,0).x < 0.5;
+  if(wasSolid && nowFluid){
+    float us = dot(uInletU,uInletU);
+    float g[9];
+    for(int q=0;q<9;q++){
+      float cu = float(CX[q])*uInletU.x + float(CY[q])*uInletU.y;
+      g[q] = WQ[q]*(1.+3.*cu+4.5*cu*cu-1.5*us) - WQ[q];
+    }
+    o0 = vec4(g[0],g[1],g[2],g[3]);
+    o1 = vec4(g[4],g[5],g[6],g[7]);
+    o2 = vec4(g[8],0.,0.,0.);
+  } else { o0=a; o1=b; o2=vec4(g8,0.,0.,0.); }
+}`;
+
   function compile(gl, vsrc, fsrc) {
     const p = gl.createProgram();
     for (const [t, s] of [[gl.VERTEX_SHADER, vsrc], [gl.FRAGMENT_SHADER, fsrc]]) {
@@ -188,6 +250,9 @@ void main(){
       this.progStream = compile(gl, VS, FS_STREAM);
       this.progMoments = compile(gl, VS, FS_MOMENTS);
       this.progForce = compile(gl, VS, FS_FORCE);
+      this.progDisplay = compile(gl, VS, FS_DISPLAY);
+      this.progRefill = compile(gl, VS, FS_REFILL);
+      this.canvas = canvas;
       const quad = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, quad);
       gl.bufferData(gl.ARRAY_BUFFER,
@@ -199,6 +264,7 @@ void main(){
       this.texF = [0, 1].map(() => [0, 1, 2].map(() => this._makeTex(gl.RGBA32F)));
       this.cur = 0;
       this.texObst = this._makeTex(gl.R32F);
+      this.texObstPrev = this._makeTex(gl.R32F);
       this.texMoments = this._makeTex(gl.RGBA32F);
       this.texForce = this._makeTex(gl.RGBA32F);
       this.fboF = [0, 1].map(i => this._makeFbo(this.texF[i], true));
@@ -243,10 +309,48 @@ void main(){
     }
 
     setObstacle(fn) {
+      let x0 = this.nx, x1 = 0, y0 = this.ny, y1 = 0;
       for (let i = 0; i < this.n; i++) {
-        this.obst[i] = fn(i % this.nx, (i / this.nx) | 0) | 0;
+        const x = i % this.nx, y = (i / this.nx) | 0;
+        const v = fn(x, y) | 0;
+        this.obst[i] = v;
+        if (v >= 2) {           // tracked bodies: bbox for cheap force readback
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+      this.bbox = (x1 >= x0)
+        ? [Math.max(0, x0 - 2), Math.max(0, y0 - 2),
+        Math.min(this.nx - 1, x1 + 2), Math.min(this.ny - 1, y1 + 2)]
+        : null;
+      // stash previous obstacle field, upload new, refill uncovered cells
+      const gl = this.gl;
+      if (this.steps > 0) {
+        const prev = new Float32Array(this.n);
+        for (let i = 0; i < this.n; i++) prev[i] = this._prevObst ? this._prevObst[i] : 0;
+        gl.bindTexture(gl.TEXTURE_2D, this.texObstPrev);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.nx, this.ny,
+          gl.RED, gl.FLOAT, prev);
       }
       this._uploadObstacle();
+      if (this.steps > 0) this._refill();
+      this._prevObst = this.obst.slice();
+    }
+
+    _refill() {
+      const gl = this.gl;
+      gl.viewport(0, 0, this.nx, this.ny);
+      gl.bindVertexArray(this.vao);
+      const dst = 1 - this.cur;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboF[dst]);
+      const pr = this.progRefill;
+      this._bindCommon(pr, this.texF[this.cur]);
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, this.texObstPrev);
+      gl.uniform1i(gl.getUniformLocation(pr, "uObstPrev"), 4);
+      gl.uniform2f(gl.getUniformLocation(pr, "uInletU"), this.u0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      this.cur = dst;
     }
 
     _uploadObstacle() {
@@ -374,21 +478,49 @@ void main(){
 
     syncForces() {
       const gl = this.gl;
+      if (!this.bbox) return this.forces;
+      const [bx0, by0, bx1, by1] = this.bbox;
+      const w = bx1 - bx0 + 1, h = by1 - by0 + 1;
       gl.viewport(0, 0, this.nx, this.ny);
       gl.bindVertexArray(this.vao);
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboForce);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(bx0, by0, w, h);
       this._bindCommon(this.progForce, this.texF[this.cur]);
       gl.uniform2fv(gl.getUniformLocation(this.progForce, "uWallU"), this.wallU);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.readPixels(0, 0, this.nx, this.ny, gl.RGBA, gl.FLOAT, this._fBuf);
-      let ax = 0, ay = 0, bx = 0, by = 0;
-      const f = this._fBuf;
-      for (let i = 0; i < this.n; i++) {
-        ax += f[4 * i]; ay += f[4 * i + 1]; bx += f[4 * i + 2]; by += f[4 * i + 3];
+      gl.disable(gl.SCISSOR_TEST);
+      const buf = this._fBuf.subarray(0, w * h * 4);
+      gl.readPixels(bx0, by0, w, h, gl.RGBA, gl.FLOAT, buf);
+      let ax = 0, ay = 0, cx = 0, cy = 0;
+      for (let i = 0; i < w * h; i++) {
+        ax += buf[4 * i]; ay += buf[4 * i + 1];
+        cx += buf[4 * i + 2]; cy += buf[4 * i + 3];
       }
       this.forces[2] = { fx: ax, fy: ay };
-      this.forces[3] = { fx: bx, fy: by };
+      this.forces[3] = { fx: cx, fy: cy };
       return this.forces;
+    }
+
+    // GPU display: no readback. cmapStops: 5 [r,g,b] arrays in 0..1.
+    drawDisplay(field, cmapStops, scale) {
+      const gl = this.gl;
+      this.momentsPass();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.bindVertexArray(this.vao);
+      const pr = this.progDisplay;
+      gl.useProgram(pr);
+      gl.uniform2i(gl.getUniformLocation(pr, "uGrid"), this.nx, this.ny);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.texMoments);
+      gl.uniform1i(gl.getUniformLocation(pr, "uMom"), 0);
+      gl.uniform1i(gl.getUniformLocation(pr, "uField"),
+        field === "speed" ? 1 : field === "press" ? 2 : 0);
+      gl.uniform1f(gl.getUniformLocation(pr, "uScale"), scale);
+      gl.uniform3fv(gl.getUniformLocation(pr, "uStops"),
+        new Float32Array(cmapStops.flat()));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
     bodyForce(b) { return this.forces[b]; }

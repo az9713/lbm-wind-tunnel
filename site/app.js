@@ -13,7 +13,7 @@
   /* ---------------- engine bootstrap ---------------- */
   const tunnelCanvas = $("tunnel");
   let engineKind = "gpu";
-  let makeEngine;
+  let makeEngine;                // headless factory (self-checks)
   try {
     const probe = new LBMGPU.GpuEngine(8, 8, {});
     void probe;
@@ -35,8 +35,13 @@
   $("meta-grid").textContent = `grid: ${NX}×${NY}`;
   $("dim-right").textContent = NX;
   tunnelCanvas.width = NX; tunnelCanvas.height = NY;
-  const ctx2d = tunnelCanvas.getContext("2d");
-  const img = ctx2d.createImageData(NX, NY);
+  // GPU path: the lab engine owns the visible canvas and colormaps on-GPU
+  // (zero readbacks per frame). CPU path: 2d context + ImageData.
+  const makeLabEngine = engineKind === "gpu"
+    ? (opts) => new LBMGPU.GpuEngine(NX, NY, { ...opts, canvas: tunnelCanvas })
+    : (opts) => new LBM.CpuEngine(NX, NY, opts);
+  const ctx2d = engineKind === "cpu" ? tunnelCanvas.getContext("2d") : null;
+  const img = ctx2d ? ctx2d.createImageData(NX, NY) : null;
 
   /* ---------------- silhouettes ---------------- */
   function decodeSil(key) {
@@ -67,7 +72,12 @@
         const sx = Math.min(sil.w - 1, (x / sc) | 0);
         if (sil.map[sy * sil.w + sx]) {
           const gx = x0 + x, gy = y0 + y;
-          if (gx >= 0 && gx < NX && gy >= 0 && gy < NY) obst[gy * NX + gx] = id;
+          // never overwrite walls/road (id 1): a body may sink into the road
+          // so wheels merge with it — avoids 1-cell fluid channels that no
+          // lattice can resolve
+          if (gx >= 0 && gx < NX && gy >= 0 && gy < NY && obst[gy * NX + gx] !== 1) {
+            obst[gy * NX + gx] = id;
+          }
         }
       }
     }
@@ -93,7 +103,7 @@
 
   /* ---------------- lab state ---------------- */
   const state = {
-    preset: "drafting",
+    preset: "",
     U: 0.08, Re: 100, gap: 0.5, size: 24,
     stepsPerFrame: 6, paused: false, field: "vort", cmap: "rdbu",
     obst: new Uint8Array(NX * NY),
@@ -101,10 +111,15 @@
     freezeUntil: 0,        // engine.steps threshold while gauges settle
     cdHist: [[], []], clHist: [[], []],
     drawMode: false, brush: 6,
-    eng: null, tau: 0.6,
+    eng: null, tau: 0.6, nanStrikes: 0,
   };
 
-  const TAU_MIN = 0.552;
+  // fp32 GPU stability floor: clean bluff bodies tolerate tau near the BGK
+  // edge; the moving-road presets (thin shear layers at sharp wheels) need
+  // more headroom.
+  function tauMin() {
+    return (state.preset === "drafting") ? 0.58 : 0.552;
+  }
 
   function charSize() {
     // characteristic frontal size for Re/tau (body A if present, else size)
@@ -114,6 +129,7 @@
 
   function computeTau() {
     const D = charSize();
+    const TAU_MIN = tauMin();
     let tau = 3 * state.U * D / state.Re + 0.5;
     let note = "";
     if (tau < TAU_MIN) {
@@ -150,13 +166,15 @@
         const L = Math.round(NX * 0.16);
         const x0 = Math.round(NX * 0.16);
         const gapCells = Math.round(state.gap * L);
-        const hA = stampSil(o, SIL.carSide, L, x0, 2, 2);
-        stampSil(o, SIL.carSide, L, x0 + L + gapCells, 2, 3);
+        // cars sit sunk 2 cells into the road: wheels merge with the ground,
+        // no unresolvable 1-cell gap channels
+        const hA = stampSil(o, SIL.carSide, L, x0, 0, 2);
+        stampSil(o, SIL.carSide, L, x0 + L + gapCells, 0, 3);
         return {
           obst: o, open: true, wall: [1],
           bodies: {
-            2: { kind: "car", L, A: hA, x0, y0: 2 },
-            3: { kind: "car", L, A: hA, x0: x0 + L + gapCells, y0: 2 },
+            2: { kind: "car", L, A: hA - 2, x0, y0: 0 },
+            3: { kind: "car", L, A: hA - 2, x0: x0 + L + gapCells, y0: 0 },
           },
           labels: ["leader", "trailing car"],
         };
@@ -228,7 +246,12 @@
     },
   };
 
+  const PRESET_RE = { drafting: 60, side: 80, birds: 80 };
   function applyPreset(name, keepFlow = false) {
+    if (name !== state.preset && PRESET_RE[name]) {
+      state.Re = PRESET_RE[name];
+      $("s-re").value = state.Re; $("o-re").value = state.Re;
+    }
     state.preset = name;
     document.querySelectorAll("#presets .preset").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.preset === name)));
@@ -252,7 +275,7 @@
   }
 
   function rebuildEngine(keepFlow, presetInfo) {
-    const eng = makeEngine(NX, NY, { tau: state.tau, u0: state.U, open: true });
+    const eng = makeLabEngine({ tau: state.tau, u0: state.U, open: true });
     eng.setObstacle((x, y) => state.obst[y * NX + x]);
     if (presetInfo && presetInfo.wall) {
       eng.setWallVelocity(1, state.U, 0);        // moving road/ceiling
@@ -312,6 +335,21 @@
     return { buf: vortBuf, signed: true };
   }
 
+  const CMAP_STOPS = {
+    rdbu: [[26, 66, 129], [116, 169, 207], [241, 241, 238], [239, 138, 98], [162, 24, 24]],
+    magma: [[8, 8, 25], [84, 20, 125], [185, 55, 121], [249, 140, 80], [252, 253, 191]],
+    viridis: [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]],
+  };
+  function fieldScale() {
+    return state.field === "speed" ? 1 / (1.6 * state.U)
+      : state.field === "press" ? 1 / (0.48 * state.U)
+        : 1 / (0.2 * state.U);
+  }
+  function drawGpu() {
+    state.eng.drawDisplay(state.field,
+      CMAP_STOPS[state.cmap].map(c => c.map(v => v / 255)), fieldScale());
+  }
+
   function draw(m) {
     const { buf } = computeField(m);
     const cmap = CMAPS[state.cmap];
@@ -343,6 +381,22 @@
     ["g-cda", "g-cdb", "g-cla", "g-saving"].forEach(id =>
       $(id).classList.toggle("frozen", frozen));
     if (eng.syncForces) eng.syncForces();
+    // NaN watchdog: a pathological obstacle arrangement can still blow up
+    // fp32 — recover honestly instead of showing garbage
+    const probe = state.bodies[2] ? eng.bodyForce(2) : null;
+    if (probe && !isFinite(probe.fx)) {
+      if (++state.nanStrikes >= 3) {
+        state.nanStrikes = 0;
+        eng.initEquilibrium(1, (x, y) => state.obst[y * NX + x] ? 0 : state.U, 0);
+        state.freezeUntil = eng.steps + 800;
+        $("banner").textContent = "The flow field hit a numerical blow-up " +
+          "(usually an obstacle arrangement with sub-cell gaps) and was " +
+          "re-initialized. The obstacles are unchanged.";
+        setTimeout(() => $("banner").textContent = "", 6000);
+      }
+    } else {
+      state.nanStrikes = 0;
+    }
     const res = [];
     for (const id of [2, 3]) {
       const b = state.bodies[id];
@@ -384,13 +438,18 @@
   let gaugeTick = 0;
   function frame() {
     if (!state.paused) {
+      const tA = performance.now();
       state.eng.step(state.stepsPerFrame);
-      const m = state.eng.computeMoments();
-      draw(m);
+      const tB = performance.now();
+      if (engineKind === "gpu") drawGpu();
+      else draw(state.eng.computeMoments());
+      const tC = performance.now();
       if (++gaugeTick % 4 === 0) {
         updateGauges();
         drawLiveCharts();
       }
+      const tD = performance.now();
+      window.__perf = { step: tB - tA, draw: tC - tB, gauges: tD - tC };
       frameCount += state.stepsPerFrame;
       const now = performance.now();
       if (now - lastFrameT > 1000) {
@@ -399,7 +458,21 @@
         lastFrameT = now; frameCount = 0;
       }
     }
-    requestAnimationFrame(frame);
+  }
+
+  // rAF is suspended when the window is hidden/occluded; a guarded timeout
+  // fallback keeps the lab ticking (slowly) so it never looks dead.
+  let gen = 0;
+  function schedule() {
+    const g = ++gen;
+    const id = setTimeout(() => { if (g === gen) loop(); }, 120);
+    requestAnimationFrame(() => {
+      if (g === gen) { clearTimeout(id); loop(); }
+    });
+  }
+  function loop() {
+    frame();
+    schedule();
   }
 
   /* ---------------- SVG chart util ---------------- */
@@ -512,7 +585,8 @@
   });
   $("b-step").addEventListener("click", () => {
     state.eng.step(1);
-    draw(state.eng.computeMoments());
+    if (engineKind === "gpu") drawGpu();
+    else draw(state.eng.computeMoments());
   });
   $("b-reset").addEventListener("click", () => applyPreset(state.preset));
   document.querySelectorAll("#presets .preset").forEach(b =>
@@ -555,6 +629,12 @@
   function moveBody(id, dx, dy) {
     const b = state.bodies[id];
     b.x0 += dx; b.y0 += dy;
+    if (b.kind === "car") {
+      // snap: either sunk on the road (0) or clearly above it (>=4 cells) —
+      // the in-between leaves sub-resolvable gap channels
+      if (b.y0 < 0) b.y0 = 0;
+      else if (b.y0 > 0 && b.y0 < 4) b.y0 = dy > 0 ? 4 : 0;
+    }
     // re-stamp obstacles from body records (keeps flow field: honest pop +
     // gauge freeze, see the info note)
     const o = new Uint8Array(NX * NY);
@@ -950,5 +1030,11 @@
   renderGallery();
   renderValidation();
   applyPreset("drafting");
-  requestAnimationFrame(frame);
+  schedule();
+  // debug/testing handle (harmless: local page, own data)
+  window.__lab = {
+    state, applyPreset, updateGauges, drawLiveCharts,
+    render: () => engineKind === "gpu" ? drawGpu() : draw(state.eng.computeMoments()),
+    checkResults: liveCheckResults,
+  };
 })();

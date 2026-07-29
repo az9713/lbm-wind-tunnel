@@ -62,7 +62,12 @@ const LBM = (() => {
 
     setObstacle(fn) {           // fn(x, y) -> body id (0 = fluid)
       for (let i = 0; i < this.n; i++) {
-        this.obst[i] = fn(i % this.nx, (i / this.nx) | 0) | 0;
+        const v = fn(i % this.nx, (i / this.nx) | 0) | 0;
+        if (this.obst[i] && !v && this.steps > 0) {
+          // uncovered cell: equilibrium refill (documented pressure pop)
+          this.setEq(i, 1, this.u0, 0);
+        }
+        this.obst[i] = v;
       }
     }
 

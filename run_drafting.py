@@ -136,6 +136,35 @@ def build_map(path="out/drafting_map.csv"):
     return path
 
 
+def snapshot_fields(gaps=(0.25, 1.0, 3.0), steps=12000):
+    """Developed vorticity field per gap, for the dynamics animation strip."""
+    import numpy as np
+    from viz import vorticity
+    for g in gaps:
+        shape = (NX, NY)
+        floor = np.zeros(shape, bool); floor[:, 0] = True; floor[:, -1] = True
+        xa = 110
+        a = car_profile(shape, xa)
+        xb = xa + L + int(g * L)
+        b = car_profile(shape, xb)
+        solid = floor | a | b
+        wu = np.zeros((2,) + shape); wu[0, :, 0] = U; wu[0, :, -1] = U
+        u0 = np.zeros((2,) + shape); u0[0] = U; u0[:, solid] = 0.0
+        from lbm import D2Q9, Solver
+        s = Solver(D2Q9, shape, _tau(), u_init=u0, solid=solid,
+                   inlet_u=U, wall_u=wu)
+        for _ in range(steps):
+            s.step()
+        np.savez_compressed(f"out/drafting_snap_{g}.npz",
+                            vort=vorticity(s.velocity()).astype(np.float32),
+                            solid=solid, gap=g)
+        print("snapshot", g, flush=True)
+
+
 if __name__ == "__main__":
+    import sys
     print("tau =", _tau(), "U =", U, flush=True)
-    print("map ->", build_map(), flush=True)
+    if "snapshots" in sys.argv:
+        snapshot_fields()
+    else:
+        print("map ->", build_map(), flush=True)
