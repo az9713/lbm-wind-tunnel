@@ -161,6 +161,18 @@ def test_two_body_link_partition():
     assert n_a == n_b > 0
 
 
+def test_drafting_dynamics_synthetic_map():
+    # with any drag-reduction-at-close-gap map, the gap must close on its own
+    from dynamics import simulate
+    gaps = np.array([0.25, 0.5, 1.0, 1.5, 2.0, 3.0])
+    cd_trail = np.array([1.0, 1.2, 1.5, 1.7, 1.85, 1.95])   # rises toward iso
+    r = simulate(gaps, cd_trail, cd_iso=2.0)
+    assert r["caught"]
+    d = np.diff(r["gap"])
+    assert (d <= 1e-9).all()                 # gap monotonically decreasing
+    assert r["timescale_ratio"] > 10         # quasi-static assumption holds
+
+
 @pytest.mark.slow
 def test_cylinder_re100_strouhal():
     from run_cylinder2d import run_re100
