@@ -1,29 +1,76 @@
-# HANDOFF — resume point for the LBM fluid simulator
+# HANDOFF — LBM fluid simulator
 
-**Read this first each new session.** No `CLAUDE.md` exists yet; the spec source of truth is `docs/plans/2026-07-29-lbm-fluid-sim.md`.
+**Status: implementation essentially COMPLETE (2026-07-29 afternoon session).**
+Spec: `docs/plans/2026-07-29-lbm-fluid-sim.md`. This file tracks what exists
+and how to regenerate anything.
 
-## Current state (as of 2026-07-29, ~7am PT)
-- **Planning is complete; zero code written.** No tests, no `requirements.txt` installed, no meshes downloaded.
-- The implementation plan (`docs/plans/2026-07-29-lbm-fluid-sim.md`) went through five user revision rounds and is final: validated D2Q9/D3Q19 BGK solver → two-car drafting study (Cd(gap) map + quasi-static ODE dynamics) → 3-bird V-formation study → realistic-mesh object gallery (car, rocket, airplane, ocean liner, bird via trimesh voxelization) → interactive WebGL results site with in-browser self-checks. Four user non-negotiables are at the top of the plan (rigor / interactive attractive site / configurable everything / realistic geometry+rendering) — treat them as binding.
-- `2026-07-29-lbm-fluid-sim.md` at repo root is a **snapshot copy** the user asked for; the `docs/plans/` file is the original. If they diverge, `docs/plans/` wins; refresh the root copy after edits.
-- `docs/2026-07-29-blindspot-pass.md` holds the blind-spot survey; its findings are already folded into the plan's "Measurement & honesty protocol" section (binding on all tasks — pre-mortem before first slow test, blockage/effective-diameter reporting, mean±std force protocol, moving-wall floor, golden-case cross-validation, fp16 fallback, drag-readout freezing).
-- Git repo initialized this session (plan Task 0 partially done: init yes; requirements/scaffold no). No remote — local only; nothing to push.
-- `.ignore/` directory at root is pre-existing user noise — leave untracked.
+## What is built and validated (all committed)
 
-## Next task
-- **Get the user's execution-mode decision, then start plan Task 0.** The pending question (asked three times, never answered): execute **subagent-driven in this session** (recommended) or in a **parallel session** via `superpowers:executing-plans`. Once answered: Task 0 (scaffold, `.gitignore`, `requirements.txt`: numpy/matplotlib/pytest, later trimesh) → Task 1 (D2Q9 + equilibrium, TDD) per the plan. Run the **pre-mortem** (see plan's Measurement & honesty protocol) before the first slow test (Task 5's Re=20 run).
-- **Budget context that motivated this project (time-sensitive):** user wanted to burn remaining weekly credits before the reset **Jul 29 8pm PT** (weekly all-models was 90% used at ~6am, the binding constraint; Fable bucket 50%). After that reset this urgency is void — if resuming post-reset, ask the user whether the project continues under normal budget discipline. Priority ladder under pressure is in the plan header: solver → drafting → site → 3D gallery → suite.
+- **Solver** `lbm.py` + `lbm_fast.py` (numba kernels, ~20 MLUPS 3D; numpy
+  fallback). D2Q9 + D3Q19, half-way bounce-back (moving walls supported),
+  velocity-shift forcing, equilibrium inlet / zero-gradient outlet.
+- **Tests** `tests/test_lbm.py` — fast suite ~30 s (`pytest -m "not slow"`),
+  slow suite: cylinder Re=100 St, sphere drag, Ising Tc, N-body energy.
+  All passing as of this session; drafting-map asserts pass, the 3L-recovery
+  band is a documented xfail (laminar wake persistence — see pre-mortem).
+- **Key measured numbers**: cylinder Re=20 Cd≈2.3 steady; Re=100 St=0.1925
+  (blockage 13.75%); isolated 2D car Cd=2.291±0.004; drafting map 0.25L→
+  Cd 0.744 (68% saving), 3L→1.796; side-by-side |Cy| antisym, 5.66 at 0.25W;
+  Ising Tc 2.2486 (0.91% off Onsager); N-body drift 0.001%/1500 steps.
+- **Site** `site/index.html` (open directly in Chrome, no server): live
+  WebGL2 D2Q9 engine (deviation storage) + CPU fallback; all three golden
+  self-checks PASS in-browser (browser St 0.1925 == Python St exactly);
+  6 presets incl. drag-the-cars; guardrail clamps; drafting/birds/gallery/
+  validation sections fill from `site/data.js`.
+- **Suite** `ising.py` (checkerboard Metropolis) + `nbody.py` (direct-sum
+  numba gravity — deliberate deviation from planned Barnes-Hut, documented
+  in the file header).
 
-## Where to read things (reference, don't re-derive)
-- `docs/plans/2026-07-29-lbm-fluid-sim.md` — full spec: tasks 0–14, validation table with tolerances, physics cheat sheet, non-negotiables, priority ladder, budget checkpoints (after Task 7 and Task 13: user pastes `/usage`).
-- `docs/2026-07-29-blindspot-pass.md` — why-a-test-fails reference (bug vs systematic vs real physics); consult before debugging any red assert.
+## Production runs (background pipelines this session)
 
-## Session-transient scratch
-- None. The blind-spot agent's output is fully captured in `docs/2026-07-29-blindspot-pass.md` (its task output file was empty — content arrived via notification and was transcribed).
+- DONE: 2D cylinder clip (`out/cylinder_re100.mp4`), drafting tandem sweep,
+  Ising sweep + coarsening video, N-body merger video.
+- IN FLIGHT at last save: drafting side-by-side (2 of 3 offsets left),
+  sphere slow test, bird study (gate→baseline→formation), 3D gallery
+  (ahmed mid-run; car/rocket/airplane/ship/bird queued), hero 3D runs not
+  yet started (`python run_hero3d.py`, run after gallery frees CPU).
 
-## How to work (essentials)
-- Ponytail full is the user's standing default (minimal diff, stdlib-first) — but the plan's non-negotiables override where they conflict; rigor and the site's polish are explicitly requested, not gold-plating.
-- TDD per plan: failing physics test → implement → pass → commit, each task. Slow tests marked `@pytest.mark.slow`, excluded from the inner loop.
-- Long 3D runs go in background Bash tasks (zero tokens while running); sequential within a family (~1.6 GB RAM each).
-- Verify by observed effects: pasted test output, Read rendered frames, file sizes — never a clean exit alone.
-- Required sub-skills when building the site: `example-skills:frontend-design`, `dataviz`, `web-design-guidelines`; verify by driving it in Chrome (claude-in-chrome).
+## Regeneration pipeline (order matters)
+
+```
+python run_drafting.py            # -> out/drafting_map.csv
+python dynamics.py                # -> out/dynamics.{csv,png}
+python run_drafting.py snapshots  # -> out/drafting_snap_*.npz
+python tools/make_drafting_strip.py
+python run_shapes3d.py            # -> out/shape_*.npz + forces_*.csv
+python run_hero3d.py              # -> out/shape_hero_*.npz
+python run_birds.py all           # -> out/birds_*.json + plane npz
+python tools/render_gallery.py    # npz -> out/shape_*.mp4
+python tools/export_golden.py     # -> site/golden.js
+python tools/build_site_data.py   # -> site/data.js + site/media/*
+```
+
+- NUMBA_NUM_THREADS: use ~6 per concurrent job on this 12-core box.
+- Verify site by driving it (claude-in-chrome on http://localhost:8741 via
+  `python -m http.server 8741` in site/ — the extension refuses file://; the
+  page itself works from file://, verified headless).
+
+## Sharp edges learned this session
+
+- Momentum-exchange force: naive full-way-BB link formula over-reads ~2.2×;
+  the exact check is Poiseuille wall-drag = g·N_fluid (a fast permanent test).
+- Browser: hidden-tab timers are intensively throttled (1/min) — self-checks
+  yield via MessageChannel; the render loop has a guarded setTimeout fallback.
+- Mesh orientation: glTF Y-up/Z-long → lattice via axes=(2,0,1) permutation
+  (+x flips for car/rocket/ship). AoA = mesh-frame rotate about X, +deg nose-up.
+- fp32 GPU + thin gaps (car wheels vs road) blow up: cars sink 2 cells into
+  the road on the site; tau floors at 0.555 in 3D runners (effective Re printed).
+- Chrome headless min window ≈ 500px: narrower screenshots crop, not reflow —
+  not a site bug.
+
+## Remaining niceties (not blockers)
+
+- Bird-study results were pending at last write — check `out/birds_*.json`,
+  then `python tools/build_site_data.py` and reload the site.
+- Hero 3D runs + their renders.
+- Final Chrome walkthrough of every section with full data.
