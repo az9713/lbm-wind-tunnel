@@ -1,87 +1,72 @@
-# HANDOFF — LBM fluid simulator
+# HANDOFF — resume point for the LBM wind-tunnel project
 
-**Status: implementation essentially COMPLETE (2026-07-29 afternoon session).**
-Spec: `docs/plans/2026-07-29-lbm-fluid-sim.md`. This file tracks what exists
-and how to regenerate anything.
+**Read this first each new session.** Spec source of truth:
+`docs/plans/2026-07-29-lbm-fluid-sim.md`. Debugging doctrine:
+`docs/pre-mortem.md` (consult before touching any red assert).
 
-## What is built and validated (all committed)
+## Current state (as of commit d868dd5, 2026-07-29 ~12:20; local repo, NO remote)
 
-- **Solver** `lbm.py` + `lbm_fast.py` (numba kernels, ~20 MLUPS 3D; numpy
-  fallback). D2Q9 + D3Q19, half-way bounce-back (moving walls supported),
-  velocity-shift forcing, equilibrium inlet / zero-gradient outlet.
-- **Tests** `tests/test_lbm.py` — fast suite ~30 s (`pytest -m "not slow"`),
-  slow suite: cylinder Re=100 St, sphere drag, Ising Tc, N-body energy.
-  All passing as of this session; drafting-map asserts pass, the 3L-recovery
-  band is a documented xfail (laminar wake persistence — see pre-mortem).
-- **Key measured numbers**: cylinder Re=20 Cd≈2.3 steady; Re=100 St=0.1925
-  (blockage 13.75%); isolated 2D car Cd=2.291±0.004; drafting map 0.25L→
-  Cd 0.744 (68% saving), 3L→1.796; side-by-side |Cy| antisym, 5.66 at 0.25W;
-  Ising Tc 2.2486 (0.91% off Onsager); N-body drift 0.001%/1500 steps.
-- **Site** `site/index.html` (open directly in Chrome, no server): live
-  WebGL2 D2Q9 engine (deviation storage) + CPU fallback; all three golden
-  self-checks PASS in-browser (browser St 0.1925 == Python St exactly);
-  6 presets incl. drag-the-cars; guardrail clamps; drafting/birds/gallery/
-  validation sections fill from `site/data.js`.
-- **Suite** `ising.py` (checkerboard Metropolis) + `nbody.py` (direct-sum
-  numba gravity — deliberate deviation from planned Barnes-Hut, documented
-  in the file header).
+Implementation is COMPLETE except for background compute still finishing.
+Everything is committed; working tree clean.
 
-## Production runs — status at ~12:05 (harness restarted once; relaunched)
+DONE and validated (numbers in README.md table + site validation ledger):
+- Solver (`lbm.py` + numba `lbm_fast.py`, ~20 MLUPS), all fast tests pass
+  (`pytest -m "not slow"`, ~70 s), slow tests passed this session:
+  cylinder St=0.1925, sphere Cd=1.324 (PASS), Ising Tc 0.91% off, N-body
+  drift 0.001%.
+- Drafting study complete: map (68% saving at 0.25L), dynamics (emergent
+  catch-up, ratio 11.4), strip, side-by-side; tests green (3L band = xfail
+  by design, laminar physics).
+- Site `site/index.html` feature-complete; in-browser GPU self-checks PASS
+  (St identical to Python). Serve via `cd site && python -m http.server 8741`
+  for browser automation (extension refuses file://; the page itself works
+  from file://).
+- 3D gallery: ahmed (Cd=2.62) and car (Cd=2.41) done + mp4s rendered.
+- Suite: ising.py, nbody.py + videos.
 
-- DONE: 2D cylinder clip + stats (St=0.1925), cylinder Re=20 (Cd=2.44),
-  full drafting map (out/drafting_map.csv) + dynamics (caught, ratio 11.4)
-  + snapshots + strip, sphere (Cd=1.324, PASS), Ising (Tc 0.91% off),
-  N-body merger (drift 0.001%), 3D gallery ahmed (Cd=2.62) + car (Cd=2.41)
-  with rendered mp4s.
-- RUNNING (two background pipelines, ~2-2.5h from 12:05, marker files
-  out/PIPE1_DONE, out/PIPE2_DONE, logs out/pipe1.log, out/pipe2.log):
-  P1 = gallery rocket/airplane/ship/bird + render_gallery;
-  P2 = bird study all stages (fixed lift axis) + hero 3D runs.
-- AFTER both markers: `python tools/export_golden.py && PYTHONPATH=. python
-  tools/build_site_data.py`, reload site, verify §4/§5 fill in, run slow
-  drafting/birds-adjacent asserts if desired, final git commit.
-- KNOWN: 3D lift axis bug (F[1] vs F[-1]) fixed mid-session — ahmed/car
-  ran with the old code; their Cd + slices valid, their Cl column is the
-  (≈0, symmetric) side force — harmless but don't quote it as lift.
-- Bird gate (fixed code) already measured Cl = 1.08 ± 0.11 at 6° AoA
-  before the restart killed the run — the gate will pass; full study rerunning.
+RUNNING in two background pipelines (started ~12:05, ~2h total; logs
+`out/pipe1.log` / `out/pipe2.log`; marker files `out/PIPE1_DONE` /
+`out/PIPE2_DONE` appear when finished):
+- P1: gallery rocket → airplane → ship → bird, then tools/render_gallery.py.
+- P2: bird study gate → baseline → formation (`run_birds.py all`, fixed
+  lift axis; pre-restart gate measured Cl=1.08±0.11 at 6° AoA so it will
+  pass), then `run_hero3d.py` (tandem + side 3D Ahmed pairs).
+- If a pipeline died (no marker, no python process burning CPU): rerun the
+  commands above; every runner is idempotent and skips nothing dangerous.
 
-## Regeneration pipeline (order matters)
+## Next task (start here)
 
-```
-python run_drafting.py            # -> out/drafting_map.csv
-python dynamics.py                # -> out/dynamics.{csv,png}
-python run_drafting.py snapshots  # -> out/drafting_snap_*.npz
-python tools/make_drafting_strip.py
-python run_shapes3d.py            # -> out/shape_*.npz + forces_*.csv
-python run_hero3d.py              # -> out/shape_hero_*.npz
-python run_birds.py all           # -> out/birds_*.json + plane npz
-python tools/render_gallery.py    # npz -> out/shape_*.mp4
-python tools/export_golden.py     # -> site/golden.js
-python tools/build_site_data.py   # -> site/data.js + site/media/*
-```
+**When both PIPE markers exist:**
+1. `python tools/export_golden.py && PYTHONPATH=. python tools/build_site_data.py`
+2. Reload site (http.server as above) — verify §4 Bird formation and §5
+   gallery cards fill with real numbers/videos; check `out/birds_formation.json`
+   `benefit_sign_positive` and report it exactly as measured (sign claim only).
+3. `python -m pytest -q` full suite once (slow included) for the record.
+4. Extract one frame from a new gallery mp4 (e.g. airplane) and eyeball it.
+5. Final commit. Goal condition = all plan requirements met; then update
+   auto-memory (`lbm-fluid-sim-project.md` still says "planned" — fix it).
 
-- NUMBA_NUM_THREADS: use ~6 per concurrent job on this 12-core box.
-- Verify site by driving it (claude-in-chrome on http://localhost:8741 via
-  `python -m http.server 8741` in site/ — the extension refuses file://; the
-  page itself works from file://, verified headless).
+## Where to read things
+- `README.md` — full run/regeneration pipeline (order matters).
+- `docs/plans/2026-07-29-lbm-fluid-sim.md` — spec; priority ladder §"Priority
+  order"; honesty protocol is binding.
+- `docs/pre-mortem.md` — two rows already CONFIRMED (force-scale bug,
+  lift-axis swap); read before debugging any assert.
+- `assets/meshes/LICENSES.md` + `site/media/CREDITS.md` — mesh attribution
+  (CC-BY items MUST keep attribution wherever published).
 
-## Sharp edges learned this session
+## Session-transient scratch (regenerate if needed; durable outputs committed)
+- three.js bundle: built with esbuild in a scratch dir —
+  `npm i three@0.160.1; npx esbuild entry.js --bundle --minify --format=iife`
+  wrapping GLTFLoader+OrbitControls onto window; durable output is
+  `site/vendor/three-bundle.js` (committed).
+- Poiseuille force-balance scratch check became the permanent test
+  `test_momentum_exchange_balances_body_force` — nothing else worth keeping.
 
-- Momentum-exchange force: naive full-way-BB link formula over-reads ~2.2×;
-  the exact check is Poiseuille wall-drag = g·N_fluid (a fast permanent test).
-- Browser: hidden-tab timers are intensively throttled (1/min) — self-checks
-  yield via MessageChannel; the render loop has a guarded setTimeout fallback.
-- Mesh orientation: glTF Y-up/Z-long → lattice via axes=(2,0,1) permutation
-  (+x flips for car/rocket/ship). AoA = mesh-frame rotate about X, +deg nose-up.
-- fp32 GPU + thin gaps (car wheels vs road) blow up: cars sink 2 cells into
-  the road on the site; tau floors at 0.555 in 3D runners (effective Re printed).
-- Chrome headless min window ≈ 500px: narrower screenshots crop, not reflow —
-  not a site bug.
-
-## Remaining niceties (not blockers)
-
-- Bird-study results were pending at last write — check `out/birds_*.json`,
-  then `python tools/build_site_data.py` and reload the site.
-- Hero 3D runs + their renders.
-- Final Chrome walkthrough of every section with full data.
+## How to work (essentials)
+- Background runs: `NUMBA_NUM_THREADS=6` per concurrent job (12 cores).
+- Verify by observed effects: read a rendered frame, run the asserts —
+  never claim from a clean exit.
+- Site testing: browser occlusion suspends rAF and throttles timers —
+  the page idles when hidden by design; set `window.__lab_force_run=true`
+  in automation to force stepping; `window.__lab` exposes state/render.
