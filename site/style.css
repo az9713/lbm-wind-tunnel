@@ -247,7 +247,7 @@ select, input[type="number"] {
 
 /* ---------- charts ---------- */
 .chart { background: var(--surface); border: 1px solid var(--hairline); padding: 10px; }
-.chart svg { display: block; width: 100%; height: auto; }
+.chart svg { display: block; width: 100%; max-width: 760px; height: auto; margin: 0 auto; }
 .chart .axis line, .chart .grid line { stroke: var(--hairline); stroke-width: 1; }
 .chart .axis text, .chart text.tick {
   font: 11px var(--mono); fill: var(--muted);

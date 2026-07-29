@@ -68,6 +68,8 @@ def main():
     # dynamics
     if (OUT / "dynamics.csv").exists():
         DATA["dynamics"] = list(csv.DictReader(open(OUT / "dynamics.csv")))
+    if (OUT / "dynamics_meta.json").exists():
+        DATA["dynamicsMeta"] = json.load(open(OUT / "dynamics_meta.json"))
     # 3D gallery: metadata + tail-averaged forces
     gallery = {}
     for npz in sorted(OUT.glob("shape_*.npz")):

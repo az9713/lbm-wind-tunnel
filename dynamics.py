@@ -72,8 +72,13 @@ def simulate(gaps, cd_trail, cd_iso, m=50.0, gap0=3.0, dt=0.01, t_max=2000.0):
 
 
 def run(map_path="out/drafting_map.csv", out_prefix="out/dynamics"):
+    import json
     gaps, cd_trail, cd_iso, _ = load_map(map_path)
     r = simulate(gaps, cd_trail, cd_iso)
+    json.dump({"caught": r["caught"], "t_end": float(r["t"][-1]),
+               "timescale_ratio": float(r["timescale_ratio"]),
+               "gap0": 3.0, "gap_end": float(r["gap"][-1])},
+              open(out_prefix + "_meta.json", "w"), indent=1)
     with open(out_prefix + ".csv", "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["t", "gap", "v_leader", "v_trailing"])

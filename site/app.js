@@ -509,7 +509,7 @@
     for (const r of refs) {
       g += `<line x1="${mL}" x2="${W - mR}" y1="${sy(r.y)}" y2="${sy(r.y)}"
         stroke="#82878b" stroke-dasharray="5 4" stroke-width="1"/>` +
-        `<text class="tick" x="${W - mR}" y="${sy(r.y) - 4}" text-anchor="end">${r.label}</text>`;
+        `<text class="tick" x="${mL + 4}" y="${sy(r.y) - 4}" text-anchor="start">${r.label}</text>`;
     }
     for (const s of series) {
       const d = s.pts.filter(p => isFinite(p[1]))
@@ -815,7 +815,7 @@
         <div class="figcap"><b>Fig. 5 — The catch-up, emergent.</b> Both cars
         get the same engine; the follower closes the gap on its own because the
         map above says its drag falls as it approaches.
-        ${DATA.dynamicsMeta ? "" : ""}</div></div>
+        ${DATA.dynamicsMeta ? `Quasi-static validity: gap-closing time / wake-convection time = ${DATA.dynamicsMeta.timescale_ratio.toFixed(1)} ≫ 1.` : ""}</div></div>
     </div>`;
     if (side.length) {
       html += `<div class="chart" style="margin-top:16px"><div id="chart-side"></div>
