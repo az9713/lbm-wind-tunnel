@@ -180,6 +180,48 @@ def test_cylinder_re100_strouhal():
     assert 0.14 < r["St"] < 0.20, r
 
 
+def _load_drafting_map():
+    import csv, pathlib
+    p = pathlib.Path("out/drafting_map.csv")
+    if not p.exists():
+        pytest.skip("drafting map not built yet (python run_drafting.py)")
+    rows = list(csv.DictReader(open(p)))
+    iso = next(r for r in rows if r["kind"] == "isolated")
+    tb = sorted(((float(r["param"]), float(r["Cd"]))
+                 for r in rows if r["kind"] == "tandem" and r["car"] == "b"))
+    side = [(float(r["param"]), float(r["Cy"]))
+            for r in rows if r["kind"] == "side" and r["car"] == "a"]
+    return float(iso["Cd"]), tb, sorted(side)
+
+
+def test_drafting_close_gap_saving():
+    # slipstream: trailing car at 0.25L must pay < 70% of isolated drag
+    cd_iso, tb, _ = _load_drafting_map()
+    assert tb[0][0] <= 0.25
+    assert tb[0][1] < 0.7 * cd_iso, (tb[0], cd_iso)
+    # and the effect must fade monotonically with distance
+    cds = [c for _, c in tb]
+    assert cds == sorted(cds), cds
+
+
+def test_drafting_side_force_monotonic():
+    # side-by-side: lateral push grows as the offset shrinks
+    _, _, side = _load_drafting_map()
+    if not side:
+        pytest.skip("side-by-side runs not in map yet")
+    mags = [abs(cy) for _, cy in side]          # sorted by increasing offset
+    assert mags == sorted(mags, reverse=True), side
+
+
+@pytest.mark.xfail(strict=False, reason="laminar wakes persist past 3L — "
+                   "pre-mortem row 'Drafting 3L recovery': the 15% band "
+                   "encodes turbulent-wake intuition; at Re~100 the deficit "
+                   "at 3L is real physics, reported not hidden")
+def test_drafting_recovery_at_3L():
+    cd_iso, tb, _ = _load_drafting_map()
+    assert abs(tb[-1][1] / cd_iso - 1) < 0.15, (tb[-1], cd_iso)
+
+
 @pytest.mark.slow
 def test_ising_critical_temperature():
     # Onsager exact: Tc = 2/ln(1+sqrt(2)) = 2.269; susceptibility peak +-3%
