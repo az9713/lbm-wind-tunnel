@@ -44,3 +44,35 @@ def test_poiseuille_profile():
     h = (ny - 2) / 2
     ana = 1 - (yc/h)**2
     assert np.allclose(ux/ux.max(), ana/ana.max(), atol=0.02)
+
+
+def test_momentum_exchange_balances_body_force():
+    # honesty protocol: diagnostics get their own tests. In steady Poiseuille
+    # the wall drag must equal the injected body force exactly.
+    from diagnostics import MomentumExchange
+    nx, ny, tau, g = 8, 33, 0.9, 1e-6
+    solid = np.zeros((nx, ny), bool); solid[:, 0] = solid[:, -1] = True
+    s = Solver(D2Q9, (nx, ny), tau, solid=solid, force=(g, 0.0))
+    for _ in range(8000): s.step()
+    F = MomentumExchange(D2Q9, solid).force(s.f)
+    assert abs(F[0] - g * (~solid).sum()) < 1e-4 * g * (~solid).sum()
+
+
+def test_strouhal_on_synthetic_signal():
+    # FFT pipeline test: noisy sine with transient must recover f0 (protocol).
+    from diagnostics import strouhal
+    rng = np.random.default_rng(1)
+    t = np.arange(6000); f0 = 0.013
+    sig = np.sin(2*np.pi*f0*t) + 0.2*rng.standard_normal(t.size)
+    sig[:1000] += np.linspace(3, 0, 1000)          # transient
+    st = strouhal(sig[1500:], D=20, U=0.05)        # St = f0*D/U = 5.2
+    assert abs(st - f0*20/0.05) / (f0*20/0.05) < 0.03
+
+
+def test_cylinder_re20_steady_drag():
+    from run_cylinder2d import make_sim
+    s, diag = make_sim(nx=400, ny=160, D=20, U=0.05, Re=20)
+    cds = [diag.coefficients(s)[0] for _ in range(4000) if s.step() or True][-500:]
+    cd = np.mean(cds)
+    assert np.std(cds) < 0.01 * cd
+    assert 1.5 < cd < 3.0

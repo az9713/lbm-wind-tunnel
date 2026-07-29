@@ -52,6 +52,18 @@ class Solver:
         else:
             u = np.asarray(u_init, dtype=dtype)
         self.f = equilibrium(lat, rho, u).astype(dtype)
+        # boundary links for half-way bounce-back: (q, opp_q, fluid cells with
+        # a solid neighbor along c_q)
+        self.links = []
+        if solid is not None:
+            dim = lat.c.shape[1]
+            for q, ci in enumerate(lat.c):
+                if not ci.any():
+                    continue
+                neighbor = np.roll(solid, shift=tuple(-ci), axis=tuple(range(dim)))
+                mask = (~solid) & neighbor
+                if mask.any():
+                    self.links.append((q, int(lat.opp[q]), np.nonzero(mask)))
 
     def rho(self):
         return self.f.sum(0)
@@ -73,15 +85,16 @@ class Solver:
             u = u + self.tau * self.force.reshape(-1, *([1]*rho.ndim)) / rho
         feq = equilibrium(lat, rho, u)
         fpost = f + (feq - f) / self.tau
-        if self.solid is not None:
-            fpost[:, self.solid] = f[:, self.solid]   # no collision in walls
         fnew = stream(lat, fpost)
-        if self.solid is not None:
-            fnew[:, self.solid] = fnew[lat.opp][:, self.solid]  # full bounce-back
+        # half-way bounce-back: wall sits half a link beyond the last fluid
+        # cell; populations reflect at the fluid boundary cell, so solid-cell
+        # contents never matter and the exact momentum-exchange force is
+        # F = 2 * sum_links c_q * f[opp_q] on the post-stream state.
+        for q, oq, idx in self.links:
+            fnew[(oq,) + idx] = fpost[(q,) + idx]
         if self.inlet_u is not None:
             self._open_bcs(fnew)
         self.f = fnew
-        return self.f
 
     def _open_bcs(self, f):
         dim = self.lat.c.shape[1]
