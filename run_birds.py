@@ -29,14 +29,15 @@ U = 0.08
 RE = 200
 MESH = Path("assets/meshes/bird.glb")
 SPAN = 90          # wingspan in cells (longest mesh axis)
-AOA = -6.0         # nose-down rotation puts wing chord at ~+6 deg incidence
+AOA = 6.0          # mesh-frame pitch about X: +deg = nose up (verified visually)
 
 
 def bird_mask(shape, rotate_extra=None, anchor=None, ycenter=None, zcenter=None):
-    rot = [("y", AOA)] if AOA else []
+    rot = [("x", AOA)] if AOA else []
     if rotate_extra:
         rot = rotate_extra + rot
-    mask, info = from_mesh(MESH, shape, SPAN, rotate=rot or None, anchor=anchor)
+    mask, info = from_mesh(MESH, shape, SPAN, rotate=rot or None, anchor=anchor,
+                           axes=(2, 0, 1))
     if ycenter is not None or zcenter is not None:
         idx = np.array(np.nonzero(mask))
         sh = [0, 0, 0]

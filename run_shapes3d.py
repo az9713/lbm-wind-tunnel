@@ -26,13 +26,21 @@ MESHES = Path("assets/meshes")
 # per-object config: mesh file (None = procedural Ahmed), rotation to put the
 # nose upstream (-x = inflow side) & wings level, target length L in cells,
 # domain shape, ground plane (cars get a moving road)
+# axes=(2,0,1): glTF Y-up/Z-long -> lattice x=length, y=side, z=up.
+# flips verified visually (out/mesh_orient.png): nose/bow upstream (-x side).
+# aoa: mesh-frame rotation about X (= lattice pitch), +deg = nose up.
 OBJECTS = {
     "ahmed":    dict(mesh=None, L=110, shape=(220, 100, 84), ground=True,  Re=200),
-    "rocket":   dict(mesh="rocket.glb", L=130, shape=(220, 96, 96), ground=False, Re=200),
-    "airplane": dict(mesh="airplane.glb", L=120, shape=(220, 110, 90), ground=False,
-                     Re=200, aoa=-5.0),
-    "ship":     dict(mesh="ship.glb", L=140, shape=(230, 96, 90), ground=False, Re=200),
-    "bird":     dict(mesh="bird.glb", L=100, shape=(200, 130, 84), ground=False, Re=200),
+    "car":      dict(mesh="car.glb", L=100, shape=(220, 100, 70), ground=True,
+                     Re=200, axes=(2, 0, 1), flips=(True, False, False)),
+    "rocket":   dict(mesh="rocket.glb", L=130, shape=(220, 96, 96), ground=False,
+                     Re=200, axes=(1, 2, 0), flips=(True, False, False)),
+    "airplane": dict(mesh="airplane.glb", L=120, shape=(220, 150, 90), ground=False,
+                     Re=200, axes=(2, 0, 1), aoa=5.0),
+    "ship":     dict(mesh="ship.glb", L=140, shape=(230, 96, 96), ground=False,
+                     Re=200, axes=(2, 0, 1), flips=(True, False, False)),
+    "bird":     dict(mesh="bird.glb", L=90, shape=(200, 130, 60), ground=False,
+                     Re=200, axes=(2, 0, 1), aoa=6.0),
 }
 
 
@@ -42,11 +50,11 @@ def build_mask(name, cfg):
         mask = ahmed_body(shape, cfg["L"])
         info = {"frontal_area": int(mask.any(axis=0).sum()), "procedural": True}
     else:
-        rot = cfg.get("rotate")
-        if cfg.get("aoa"):
-            rot = (rot or []) + [("y", cfg["aoa"])]
+        rot = [("x", cfg["aoa"])] if cfg.get("aoa") else None
         mask, info = from_mesh(MESHES / cfg["mesh"], shape, cfg["L"],
-                               rotate=rot, zmin=None if cfg["ground"] else None)
+                               rotate=rot, axes=cfg.get("axes"),
+                               flips=cfg.get("flips"),
+                               zmin=3 if cfg["ground"] else None)
     if cfg["ground"]:
         mask = mask.copy()
         mask[:, :, 0] = True

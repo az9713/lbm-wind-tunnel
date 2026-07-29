@@ -85,12 +85,18 @@ def keep_largest_component(mask):
     return best if best is not None else mask
 
 
-def from_mesh(path_or_mesh, shape, L, rotate=None, anchor=None, zmin=None):
+def from_mesh(path_or_mesh, shape, L, rotate=None, anchor=None, zmin=None,
+              axes=None, flips=None):
     """Voxelize a mesh onto the lattice: longest axis scaled to L cells,
     interior filled, largest component kept, centered (flow along +x).
 
-    rotate: optional (axis, degrees) applied before voxelization, e.g.
-    ('z', 90) to point the nose upstream, ('y', -5) for angle of attack.
+    rotate: optional (axis, degrees) or list of them, applied in the MESH
+    frame before voxelization (e.g. angle of attack).
+    axes: optional permutation mapping lattice axes to mesh axes, e.g.
+    (2, 0, 1) = lattice x from mesh Z (length), y from mesh X, z from mesh Y —
+    the common glTF Y-up/Z-long convention. Exact (no resampling).
+    flips: optional (bool, bool, bool) — mirror lattice axes after permuting
+    (e.g. flip x to point the nose upstream).
     zmin: if given, place the body's lowest voxel at this z index (3D).
     Returns (mask, info dict: voxel_volume, mesh_volume, frontal_area, pitch).
     """
@@ -100,11 +106,11 @@ def from_mesh(path_or_mesh, shape, L, rotate=None, anchor=None, zmin=None):
     else:
         m = path_or_mesh
     if rotate is not None:
-        axes = {"x": [1, 0, 0], "y": [0, 1, 0], "z": [0, 0, 1]}
+        unit = {"x": [1, 0, 0], "y": [0, 1, 0], "z": [0, 0, 1]}
         for ax, deg in ([rotate] if isinstance(rotate[0], str) else rotate):
             m = m.copy()
             m.apply_transform(trimesh.transformations.rotation_matrix(
-                np.radians(deg), axes[ax], m.bounds.mean(axis=0)))
+                np.radians(deg), unit[ax], m.bounds.mean(axis=0)))
     pitch = m.extents.max() / L
     if m.is_watertight:
         # interior voxelization: cell center inside mesh (no half-shell bloat)
@@ -125,6 +131,13 @@ def from_mesh(path_or_mesh, shape, L, rotate=None, anchor=None, zmin=None):
         small = np.zeros(idx.max(0) + 1, bool)
         small[tuple(idx.T)] = True
     small = keep_largest_component(small)
+    if axes is not None:
+        small = np.transpose(small, axes)
+    if flips is not None:
+        for a, fl in enumerate(flips):
+            if fl:
+                small = np.flip(small, axis=a)
+    small = np.ascontiguousarray(small)
     mask = np.zeros(shape, bool)
     dims = small.shape
     off = []
