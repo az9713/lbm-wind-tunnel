@@ -15,7 +15,7 @@ most likely legitimate PHYSICS/DISCRETIZATION cause, cheapest discriminating che
 | Drafting close-gap | per-body link partition mixing the two cars' forces | gap too small for grid (< 5 cells) merges wakes numerically | two-square link-partition unit test; count gap cells |
 | Drafting 3L recovery | domain too short — trailing car sits in outlet zone | laminar wakes decay slower than turbulent: 15% band may be real physics | double domain length: bug moves the number, physics doesn't |
 | Drafting dynamics | interpolation outside measured gap range | quasi-static assumption invalid (timescale ratio ~1) | print gap-closing time / wake-convection time; need ≫1 |
-| Bird wake signs | y/z axis swap in cross-plane extraction | vortex cores diffused at Re≈200 before sample plane | sample at 0.25 spans too: closer = stronger if physics |
+| Bird wake signs | y/z axis swap in cross-plane extraction (CONFIRMED 2026-07-29, variant: `coefficients()` returned F[1]=side force as "lift" in 3D — bird gate read Cl≈0±noise at 6° AoA; fixed to F[-1]=up axis, gate rerun) | vortex cores diffused at Re≈200 before sample plane | sample at 0.25 spans too: closer = stronger if physics |
 | V-formation L/D | per-bird force accounting cross-contamination | benefit below force noise floor at this Re/resolution | go/no-go gate: single-wing Cl at AoA must clear noise first |
 | Ising Tc | Metropolis acceptance sign, missing J/kT | finite-size shift of apparent Tc (~+1% at 128²) | susceptibility peak vs Binder crossing agreement |
 

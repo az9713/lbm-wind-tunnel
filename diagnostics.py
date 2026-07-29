@@ -41,10 +41,12 @@ class MomentumExchange:
         return F
 
     def coefficients(self, solver):
-        """(Cd, Cl): drag/lift coefficients, A = voxel frontal extent."""
+        """(Cd, Cl): drag along +x, lift along the UP axis — y in 2D, z in 3D
+        (the last axis both times). Confirmed pre-mortem row: returning F[1]
+        in 3D silently reports the side force as 'lift'."""
         F = self.force(solver.f)
         denom = 0.5 * self.rho0 * self.U ** 2 * self.A
-        return F[0] / denom, F[1] / denom
+        return F[0] / denom, F[-1] / denom
 
 
 def strouhal(cl_history, D, U, dt=1):
