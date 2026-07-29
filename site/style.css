@@ -11,7 +11,7 @@
   --surface: #fcfcfb;        /* figure / panel surface */
   --ink: #141a1e;            /* primary ink */
   --ink-2: #4c5257;          /* secondary ink */
-  --muted: #82878b;          /* captions, axis labels */
+  --muted: #666c71;          /* captions, axis labels (4.5:1 on surface) */
   --hairline: #dde0dc;       /* gridlines */
   --rule: #b9bfba;           /* figure rules / baselines */
   --red: #c43a35;            /* measurement red: needles, live values */
@@ -89,6 +89,8 @@ header.masthead {
   padding-top: 12px;
 }
 .masthead .meta-line .live { color: var(--red); }
+.masthead .meta-line span { overflow-wrap: anywhere; }
+body { overflow-x: clip; }
 
 /* ---------- nav ---------- */
 nav.toc {
