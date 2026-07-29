@@ -639,7 +639,7 @@
   }
   tunnelCanvas.addEventListener("pointerdown", ev => {
     const { x, y } = canvasPos(ev);
-    tunnelCanvas.setPointerCapture(ev.pointerId);
+    try { tunnelCanvas.setPointerCapture(ev.pointerId); } catch (e) { /* synthetic */ }
     if (state.drawMode) { paint(x, y, ev.shiftKey); dragBody = -1; return; }
     const id = state.obst[y * NX + x];
     if (id >= 2 && state.bodies[id]) { dragBody = id; dragLast = { x, y }; }
