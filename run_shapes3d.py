@@ -103,11 +103,11 @@ def run_object(name, cfg, re_override=None):
             wz = np.gradient(u[1][:, :, zmid], axis=0) - np.gradient(u[0][:, :, zmid], axis=1)
             frames_v.append(np.stack([umag_v, wy]).astype(np.float32))
             frames_h.append(np.stack([umag_h, wz]).astype(np.float32))
-            if i % 2000 == 0:
-                print(f"[{name}] step {i} Cd={cd:.3f} Cl={cl:.3f}", flush=True)
             if not np.isfinite(cd):
                 print(f"[{name}] NaN at step {i}", flush=True)
                 return None
+        if i % 1980 == 0:      # progress (multiple of SAVE_EVERY not required)
+            print(f"[{name}] step {i} Cd={cd:.3f} Cl={cl:.3f}", flush=True)
     out = Path("out"); out.mkdir(exist_ok=True)
     np.savez_compressed(
         out / f"shape_{name}.npz",
