@@ -104,6 +104,29 @@ def test_poiseuille_3d_profile():
     assert np.allclose(ux/ux.max(), ana/ana.max(), atol=0.02)
 
 
+def test_from_mesh_voxelization():
+    # deterministic primitive: icosphere is watertight with known volume
+    import trimesh
+    from geometry import from_mesh
+    m = trimesh.creation.icosphere(subdivisions=3, radius=1.0)
+    mask, info = from_mesh(m, (64, 40, 40), L=24)
+    assert info["watertight"]
+    assert abs(info["voxel_volume"] - info["mesh_volume"]) / info["mesh_volume"] < 0.10
+    assert info["frontal_area"] > 0
+    # single connected component: flood from one voxel reaches all of them
+    from geometry import keep_largest_component
+    assert keep_largest_component(mask).sum() == mask.sum()
+
+
+def test_ahmed_body_mask():
+    from geometry import ahmed_body
+    mask3 = ahmed_body((120, 60, 50), L=60)
+    assert mask3.any() and not mask3[:, :, 0].any()   # clearance above ground
+    prof = mask3[:, 30, :]                            # centerline side profile
+    heights = [prof[x].nonzero()[0].max() for x in range(120) if prof[x].any()]
+    assert heights[-1] < max(heights)                 # rear slant drops the roofline
+
+
 def test_render_2d_makes_mp4(tmp_path):
     from viz import render_2d
     rng = np.random.default_rng(2)
@@ -117,3 +140,29 @@ def test_cylinder_re100_strouhal():
     from run_cylinder2d import run_re100
     r = run_re100()
     assert 0.14 < r["St"] < 0.20, r
+
+
+@pytest.mark.slow
+def test_sphere_re100_drag():
+    # Schiller-Naumann: Cd = 24/Re*(1+0.15*Re^0.687) = 1.09 at Re=100.
+    # +-25% band: voxelization + 20%-per-side blockage both push Cd up.
+    from lbm import D3Q19
+    from diagnostics import MomentumExchange
+    import geometry
+    nx, ny, nz, D, U, Re = 160, 80, 80, 16, 0.08, 100
+    solid = geometry.sphere((nx, ny, nz), (nx // 4, ny // 2, nz // 2), D / 2)
+    D_eff = int(solid[:, ny // 2, :].any(axis=0).sum()) + 1
+    tau = 3 * U * D_eff / Re + 0.5
+    u0 = np.zeros((3, nx, ny, nz), np.float32); u0[0] = U
+    u0[:, solid] = 0.0
+    s = Solver(D3Q19, (nx, ny, nz), tau, u_init=u0, solid=solid,
+               inlet_u=U, dtype=np.float32)
+    # frontal area: voxel-projected disk (honest denominator per protocol)
+    diag = MomentumExchange(D3Q19, solid, U=U)
+    cds = []
+    for i in range(8000):
+        s.step()
+        if i >= 7500:
+            cds.append(diag.coefficients(s)[0])
+    cd = float(np.mean(cds))
+    assert 0.8 < cd < 1.4, (cd, diag.A, D_eff)
