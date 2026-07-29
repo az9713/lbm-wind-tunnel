@@ -932,6 +932,34 @@
         <p class="figcap"><b>What to look for:</b> ${info.watch}</p>`;
       grid.appendChild(card);
     }
+    // suite extension: same rigor loop, different physics
+    const suite = [
+      DATA.ising && {
+        title: "Ising model at the critical point", vid: "ising_coarsening.mp4",
+        stats: `Tc measured ${DATA.ising.Tc_measured.toFixed(4)} vs Onsager exact 2.2692 ` +
+          `(${(DATA.ising.rel_err * 100).toFixed(2)}% off) · ${DATA.ising.n}² spins`,
+        watch: "Magnetic domains flickering at every size — the scale-free " +
+          "fluctuations that only exist exactly at a phase transition.",
+      },
+      DATA.nbody && {
+        title: "Galaxy collision (N-body)", vid: "nbody_merger.mp4",
+        stats: `N=${DATA.nbody.n.toLocaleString()} particles · energy drift ` +
+          `${(DATA.nbody.drift * 100).toFixed(2)}% over ${DATA.nbody.steps} steps`,
+        watch: "Tidal tails flung out on close approach, then the slow spiral " +
+          "into a single merged blob — gravity only, no scripting.",
+      },
+    ].filter(Boolean);
+    const vidset = new Set(DATA.videos || []);
+    for (const s of suite) {
+      if (!vidset.has(s.vid)) continue;
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `<h3>${s.title}</h3>
+        <video controls loop muted preload="metadata" src="media/${s.vid}"></video>
+        <p class="stats">${s.stats}</p>
+        <p class="figcap"><b>What to look for:</b> ${s.watch}</p>`;
+      grid.appendChild(card);
+    }
     initViewers();
   }
 
@@ -1006,13 +1034,15 @@
       ["Cylinder Re=20 drag", "steady, Cd ∈ [1.5, 3.0]", "pytest: steady to <1%, in range (blockage 14%)", "PASS", "lit. (unbounded 2.0–2.2)"],
       ["Cylinder Re=100 Strouhal", "0.14–0.20 confined", cyl ? `python ${cyl.St.toFixed(4)}` + (stc ? ` · browser ${stc.measured.toFixed(4)}` : "") : "python run finishing", cyl ? "PASS" : "…", "lit. St≈0.16–0.17 unbounded"],
       ["Momentum-exchange force", "= body-force input, exactly", "pytest: matches to 1e-4 (Poiseuille balance)", "PASS", "momentum conservation"],
-      ["Sphere Re=100 drag", "Cd ≈ 1.09 ± 25%", gal.sphereCd || "pytest slow run", "run", "Schiller–Naumann"],
+      ["Sphere Re=100 drag", "Cd ≈ 1.09 ± 25%", DATA.sphere ? `Cd=${DATA.sphere.Cd.toFixed(2)} (blockage ${(DATA.sphere.blockage * 100).toFixed(0)}%)` : "slow test queued", DATA.sphere ? (DATA.sphere.Cd > 0.8 && DATA.sphere.Cd < 1.4 ? "PASS" : "FAIL") : "…", "Schiller–Naumann"],
       ["Ahmed body Cd", "reported vs experiment*", gal.ahmed && gal.ahmed.Cd_mean ? `Cd=${gal.ahmed.Cd_mean.toFixed(2)} at Re=${gal.ahmed.Re} (laminar: ~10× the high-Re value, as for any bluff body)` : "3D run in progress", gal.ahmed && gal.ahmed.Cd_mean ? "REPORTED*" : "…", "Ahmed et al. 1984: 0.26–0.29 at Re≈10⁶"],
       ["Drafting: close-gap saving", "Cd_trail < 0.7 × Cd_iso", closeB && iso ? `${closeB.param}L gap: ${parseFloat(closeB.Cd).toFixed(2)} vs iso ${parseFloat(iso.Cd).toFixed(2)}` : "sweep in progress", closeB && iso ? (parseFloat(closeB.Cd) < 0.7 * parseFloat(iso.Cd) ? "PASS" : "FAIL") : "…", "platoon lit.: 30–60%"],
       ["Drafting: recovery at 3L", "within 15% of isolated", farB && iso ? `${farB.param}L gap: ${parseFloat(farB.Cd).toFixed(2)}` : "sweep in progress", farB && iso ? (Math.abs(parseFloat(farB.Cd) / parseFloat(iso.Cd) - 1) < 0.15 ? "PASS" : "NOTE†") : "…", "laminar wakes decay slowly — see †"],
       ["Drafting dynamics", "gap closes, ratio ≫ 1", DATA.dynamics ? "emergent catch-up from measured map" : "pending", DATA.dynamics ? "PASS" : "…", "quasi-static ODE"],
       ["Bird wake sign pattern", "up outboard / down inboard", DATA.birdsBaseline ? (DATA.birdsBaseline.mechanism_ok ? "measured as predicted" : "NOT resolved") : "3D run pending", DATA.birdsBaseline ? (DATA.birdsBaseline.mechanism_ok ? "PASS" : "FAIL") : "…", "Lissaman & Shollenberger 1970"],
       ["V-formation benefit", "trailing L/D > isolated", DATA.birdsFormation ? `sign ${DATA.birdsFormation.benefit_sign_positive ? "positive" : "not resolved"}` : "3D run pending", DATA.birdsFormation ? (DATA.birdsFormation.benefit_sign_positive ? "PASS" : "NOTE") : "…", "Portugal et al. 2014"],
+      ["(Suite) Ising Tc", "2.269 ± 3% (Onsager exact)", DATA.ising ? `Tc=${DATA.ising.Tc_measured.toFixed(4)} (${(DATA.ising.rel_err * 100).toFixed(2)}%)` : "sweep pending", DATA.ising ? (DATA.ising.rel_err < 0.03 ? "PASS" : "FAIL") : "…", "Onsager 1944, exact"],
+      ["(Suite) N-body energy", "drift < 2% (leapfrog+softening)", DATA.nbody ? `${(DATA.nbody.drift * 100).toFixed(2)}% over ${DATA.nbody.steps} steps, N=${DATA.nbody.n.toLocaleString()}` : "merger running", DATA.nbody ? (DATA.nbody.drift < 0.02 ? "PASS" : "FAIL") : "…", "energy conservation"],
     ];
     $("validation-table").innerHTML = `<table class="validation">
       <caption>Validation ledger. * = our Reynolds is orders of magnitude below

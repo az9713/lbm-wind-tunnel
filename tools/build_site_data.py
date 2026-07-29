@@ -84,10 +84,13 @@ def main():
         gallery[name] = meta
     if gallery:
         DATA["gallery"] = gallery
-    # birds
+    # birds + suite + sphere
     for k, fn in (("birdsGate", "birds_gate.json"),
                   ("birdsBaseline", "birds_baseline.json"),
-                  ("birdsFormation", "birds_formation.json")):
+                  ("birdsFormation", "birds_formation.json"),
+                  ("sphere", "sphere.json"),
+                  ("ising", "ising.json"),
+                  ("nbody", "nbody.json")):
         if (OUT / fn).exists():
             DATA[k] = json.load(open(OUT / fn))
     # silhouettes (always available once meshes exist)

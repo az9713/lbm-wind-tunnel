@@ -220,4 +220,10 @@ def test_sphere_re100_drag():
         if i >= 7500:
             cds.append(diag.coefficients(s)[0])
     cd = float(np.mean(cds))
+    import json, pathlib
+    pathlib.Path("out").mkdir(exist_ok=True)
+    json.dump({"Cd": cd, "Cd_std": float(np.std(cds)), "A": int(diag.A),
+               "D_eff": D_eff, "Re": Re, "target": 1.09,
+               "blockage": D_eff / ny},
+              open("out/sphere.json", "w"), indent=1)
     assert 0.8 < cd < 1.4, (cd, diag.A, D_eff)
