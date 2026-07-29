@@ -981,6 +981,7 @@
         ? `Re=${meta.Re} · grid ${meta.shape.join("×")} · body ${meta.L} cells long · ` +
         `τ=${meta.tau.toFixed(3)}` +
         (meta.Cd_mean !== undefined ? ` · Cd=${meta.Cd_mean.toFixed(2)}±${meta.Cd_std.toFixed(2)}` : "") +
+        (meta.CdA_mean !== undefined ? ` · CdA=${meta.CdA_mean.toFixed(2)} · CdB=${meta.CdB_mean.toFixed(2)}` : "") +
         (name === "airplane" && meta.Cl_mean !== undefined ? ` · Cl=${meta.Cl_mean.toFixed(2)}` : "")
         : "run in progress — numbers land here when it finishes";
       card.innerHTML = `<h3>${info.title}</h3>${media}${viewer}

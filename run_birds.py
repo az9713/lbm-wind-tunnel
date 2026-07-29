@@ -102,7 +102,7 @@ def wing_geometry(mask):
 def stage_gate(shape=(160, 120, 80), steps=6000):
     """Cl at AoA must exceed 3x its own std AND the |Cl| at zero AoA."""
     out = {}
-    for label, aoa in (("aoa", None), ("zero", [("y", -AOA)])):
+    for label, aoa in (("aoa", None), ("zero", [("x", -AOA)])):
         mask, info = bird_mask(shape, rotate_extra=aoa)
         mask = keep_largest_component(mask)
         stats, _, _ = run_sim(shape, [mask], steps)

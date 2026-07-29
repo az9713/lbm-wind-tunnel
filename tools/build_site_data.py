@@ -80,9 +80,13 @@ def main():
         if fcsv.exists():
             arr = np.genfromtxt(fcsv, delimiter=",", names=True)
             tail = arr[-5000:]
-            meta["Cd_mean"] = float(np.mean(tail["Cd"]))
-            meta["Cd_std"] = float(np.std(tail["Cd"]))
-            meta["Cl_mean"] = float(np.mean(tail["Cl"]))
+            if "Cd" in arr.dtype.names:
+                meta["Cd_mean"] = float(np.mean(tail["Cd"]))
+                meta["Cd_std"] = float(np.std(tail["Cd"]))
+                meta["Cl_mean"] = float(np.mean(tail["Cl"]))
+            else:  # hero pair runs log CdA,ClA,CdB,ClB
+                meta["CdA_mean"] = float(np.mean(tail["CdA"]))
+                meta["CdB_mean"] = float(np.mean(tail["CdB"]))
         gallery[name] = meta
     if gallery:
         DATA["gallery"] = gallery
