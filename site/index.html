@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Drafting Effect — a validated LBM wind tunnel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="report-no">Technical report · Lattice-Boltzmann laboratory · 2026-07-29</div>
+    <h1>The Drafting Effect<br><em>and other experiments in a browser wind tunnel</em></h1>
+    <p class="dek">
+      Why does the second race car catch the first one? Why do geese fly in a V?
+      This page runs a real fluid simulation — the same solver, the same
+      equations, cross-checked against a validated Python engine — live in your
+      browser. Every number on this page traces to a run you can inspect, and
+      the checks that prove the physics are a button you can press.
+    </p>
+    <div class="meta-line">
+      <span>Solver: D2Q9 lattice-Boltzmann (BGK)</span>
+      <span id="meta-engine" class="live">engine: …</span>
+      <span id="meta-grid">grid: …</span>
+      <span id="meta-fps">— steps/s</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <ol>
+    <li><a href="#lab"><span class="sec-no">§1</span> Live laboratory</a></li>
+    <li><a href="#checks"><span class="sec-no">§2</span> Self-checks</a></li>
+    <li><a href="#drafting"><span class="sec-no">§3</span> Drafting study</a></li>
+    <li><a href="#birds"><span class="sec-no">§4</span> Bird formation</a></li>
+    <li><a href="#gallery"><span class="sec-no">§5</span> 3D gallery</a></li>
+    <li><a href="#validation"><span class="sec-no">§6</span> Validation</a></li>
+    <li><a href="#how"><span class="sec-no">§7</span> How it works</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ================= §1 LIVE LAB ================= -->
+<section class="sec" id="lab">
+  <div class="sec-head"><span class="no">§1</span><h2>Live laboratory</h2></div>
+  <p class="sec-lede">
+    A working wind tunnel. Pick an experiment, drag the sliders, and — in the
+    drafting presets — <b>drag the cars themselves</b> with your mouse and watch
+    the forces respond. Air flows left to right.
+  </p>
+
+  <div class="lab-grid">
+    <div>
+      <figure class="figure" style="margin:0">
+        <div class="tunnel-wrap">
+          <canvas id="tunnel" tabindex="0"
+            aria-label="Live flow simulation. Interactive: drag obstacles with the pointer."></canvas>
+          <div class="tunnel-banner" id="banner"></div>
+        </div>
+        <div class="dim-rail">
+          <span id="dim-left">0</span>
+          <span id="dim-mid">test section — lattice cells</span>
+          <span id="dim-right">…</span>
+        </div>
+        <figcaption>
+          <b>Fig. 1 — Test section, live.</b>
+          <span id="fig1-caption">Vortex street behind a cylinder.</span>
+          <span id="fig1-live"></span>
+        </figcaption>
+      </figure>
+
+      <div class="instruments" id="instruments">
+        <div class="gauge hero" id="g-saving">
+          <div class="glabel">Trailing car drag saving vs leader</div>
+          <div class="gvalue neutral" id="v-saving">—</div>
+          <div class="needle"><i id="n-saving" style="left:0%"></i></div>
+        </div>
+        <div class="gauge" id="g-cda">
+          <div class="glabel"><span class="swatch" style="background:var(--blue)"></span><span id="l-cda">Cd — body A</span></div>
+          <div class="gvalue" id="v-cda">—</div>
+          <div class="needle"><i id="n-cda" style="left:0%"></i></div>
+        </div>
+        <div class="gauge" id="g-cdb">
+          <div class="glabel"><span class="swatch" style="background:var(--orange)"></span><span id="l-cdb">Cd — body B</span></div>
+          <div class="gvalue" id="v-cdb">—</div>
+          <div class="needle"><i id="n-cdb" style="left:0%"></i></div>
+        </div>
+        <div class="gauge" id="g-cla">
+          <div class="glabel"><span class="swatch" style="background:var(--blue)"></span><span id="l-cla">Cl — body A</span></div>
+          <div class="gvalue" id="v-cla">—</div>
+          <div class="needle"><i id="n-cla" style="left:50%"></i></div>
+        </div>
+        <div class="gauge" id="g-re">
+          <div class="glabel">Reynolds number</div>
+          <div class="gvalue" id="v-re">—</div>
+          <div class="needle"><i id="n-re" style="left:0%"></i></div>
+        </div>
+      </div>
+
+      <details class="info">
+        <summary>What am I looking at?</summary>
+        <div class="info-body">
+          <p class="plain">Color shows the flow field you selected (vorticity =
+          local spin of the air: red spins one way, blue the other). The dark
+          shapes are solid bodies the air must go around. Drag coefficients are
+          measured the honest way — by adding up the momentum the air actually
+          hands to each body, every step.</p>
+          <span class="math">C<sub>d</sub> = 2F<sub>x</sub> / (ρ U² A),&nbsp;&nbsp;
+          C<sub>l</sub> = 2F<sub>y</sub> / (ρ U² A)</span>
+          <p>F is the momentum-exchange force summed over boundary links, A the
+          frontal size the solver actually sees (voxel-counted), U the inflow
+          speed. While you drag a body, the readouts grey out for about one
+          flow-through: moving an obstacle re-fills uncovered cells with
+          equilibrium air, which fires a brief pressure pop — the frozen gauge
+          is the honest alternative to showing you that spike.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="controls">
+      <div class="ctl-group">
+        <h3>Experiments</h3>
+        <div class="preset-row" id="presets" role="group" aria-label="Presets">
+          <button class="preset" data-preset="vortex">Vortex street</button>
+          <button class="preset" data-preset="drafting">Two cars drafting</button>
+          <button class="preset" data-preset="side">Side-by-side battle</button>
+          <button class="preset" data-preset="airplane">Airplane</button>
+          <button class="preset" data-preset="birds">Bird formation (2D analogue)</button>
+          <button class="preset" data-preset="draw">Design your own</button>
+        </div>
+        <div class="clamp-note" id="preset-note"></div>
+      </div>
+
+      <div class="ctl-group">
+        <h3>Experiment controls</h3>
+        <div class="slider-row">
+          <label>Reynolds number <output id="o-re">100</output></label>
+          <input type="range" id="s-re" min="20" max="400" step="5" value="100">
+        </div>
+        <div class="slider-row">
+          <label>Inflow speed (lattice) <output id="o-u">0.08</output></label>
+          <input type="range" id="s-u" min="0.03" max="0.12" step="0.005" value="0.08">
+        </div>
+        <div class="slider-row" id="row-gap">
+          <label>Car gap (car lengths) <output id="o-gap">0.5</output></label>
+          <input type="range" id="s-gap" min="0.15" max="2.5" step="0.05" value="0.5">
+        </div>
+        <div class="slider-row" id="row-size">
+          <label>Obstacle size (cells) <output id="o-size">24</output></label>
+          <input type="range" id="s-size" min="10" max="48" step="2" value="24">
+        </div>
+        <div class="clamp-note" id="clamp-note"></div>
+      </div>
+
+      <div class="ctl-group">
+        <h3>Presentation</h3>
+        <div class="field-row">
+          <label for="f-field">Field</label>
+          <select id="f-field">
+            <option value="vort" selected>Vorticity</option>
+            <option value="speed">Speed</option>
+            <option value="press">Pressure</option>
+          </select>
+          <label for="f-cmap">Colors</label>
+          <select id="f-cmap">
+            <option value="rdbu" selected>Blue–red</option>
+            <option value="magma">Heat</option>
+            <option value="viridis">Viridis</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label>Simulation speed <output id="o-speed">6</output> steps/frame</label>
+          <input type="range" id="s-speed" min="1" max="30" step="1" value="6">
+        </div>
+        <div class="run-row">
+          <button id="b-pause" aria-pressed="false">Pause</button>
+          <button id="b-step">Step ×1</button>
+          <button id="b-reset">Reset flow</button>
+        </div>
+      </div>
+
+      <div class="ctl-group" id="draw-tools" hidden>
+        <h3>Drawing</h3>
+        <p class="plain" style="margin:0 0 8px">Paint solid cells with the
+        pointer; hold <b>Shift</b> to erase. Reset flow when done.</p>
+        <div class="slider-row">
+          <label>Brush size <output id="o-brush">6</output></label>
+          <input type="range" id="s-brush" min="2" max="20" step="1" value="6">
+        </div>
+      </div>
+
+      <div class="ctl-group">
+        <h3>Guardrails</h3>
+        <p class="plain" style="margin:0">
+          Sliders are clamped to the region where the simulation stays honest:
+          Mach² &lt; 1 %, relaxation time τ &gt; 0.55, and the grid you have.
+          If a setting refuses to go higher, the note under the sliders says
+          why — higher Reynolds needs a bigger grid; there is no free knob.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-2col" style="margin-top:18px">
+    <div class="chart">
+      <div id="chart-cd-live"></div>
+      <div class="figcap"><b>Fig. 2 —</b> Drag coefficient, rolling history
+        (<span style="color:var(--blue)">■</span> body A,
+        <span style="color:var(--orange)">■</span> body B).
+        Mean of the last 3 s shown as ticks.</div>
+    </div>
+    <div class="chart">
+      <div id="chart-probe"></div>
+      <div class="figcap"><b>Fig. 3 —</b> Lift coefficient history — the
+        oscillation is vortex shedding; its frequency sets the Strouhal number.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= §2 SELF-CHECKS ================= -->
+<section class="sec" id="checks">
+  <div class="sec-head"><span class="no">§2</span><h2>Self-checks — don't trust us, run them</h2></div>
+  <p class="sec-lede">
+    The in-browser engine and the Python engine that produced every precomputed
+    number on this page are checked against the <em>same three golden cases</em>,
+    chosen so that together they exercise all the physics: pure bulk flow,
+    solid walls, and open in/outflow with force measurement. The Python side
+    passed these in its test suite; press the buttons to make the browser
+    engine prove itself on identical cases, live.
+  </p>
+  <div class="checks" id="checks-grid"></div>
+  <details class="info">
+    <summary>Why these three cases, and what would failure mean?</summary>
+    <div class="info-body">
+      <p class="plain"><b>Taylor–Green</b> is a swirling flow with an exact
+      pencil-and-paper answer for how fast it dies down — if collision and
+      streaming are right, the decay rate must match to 2%. <b>Poiseuille</b>
+      is flow in a pipe: the velocity profile must be an exact parabola, which
+      tests the walls. The <b>cylinder</b> sheds vortices at a rhythm (the
+      Strouhal number) that decades of experiments pin near 0.16–0.20 in this
+      confined setup — that tests inflow, outflow, and the force measurement
+      at once.</p>
+      <p>If a check fails here, the page says so in red and the live lab's
+      numbers should not be trusted. That's the deal: rigor includes showing
+      you the failure.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ================= §3 DRAFTING ================= -->
+<section class="sec" id="drafting">
+  <div class="sec-head"><span class="no">§3</span><h2>The drafting study</h2></div>
+  <p class="sec-lede">
+    The headline experiment. Two race-car profiles over a moving road; we sweep
+    the gap between them, measure every force, then let the measured
+    aerodynamics drive the cars' motion. The result: the trailing car reels the
+    leader in <em>on its own</em> — no scripting, just the wake.
+  </p>
+  <div id="drafting-content"></div>
+  <details class="info">
+    <summary>The full story: method, equations, caveats</summary>
+    <div class="info-body">
+      <p class="plain">The trailing car hides from the wind inside the leader's
+      wake — the same reason cyclists ride in a paceline. Air that has already
+      been shoved aside by the leader hits the follower more gently.</p>
+      <p>Method: 2D Ahmed-body silhouettes on a 700×200 lattice, Re = 100 on
+      car height, road and ceiling moving at the inflow speed (the physically
+      correct frame for a car on a road — a stationary floor would grow a fake
+      boundary layer under the cars). Each gap is a separate run; each car's
+      drag is measured by momentum exchange on its own boundary links, mean ±
+      std over the final 5 000 steps.</p>
+      <p>The motion coupling is quasi-static: the cars' equation of motion</p>
+      <span class="math">m dv/dt = F<sub>engine</sub> − ½ ρ v² A C<sub>d</sub>(gap)</span>
+      <p>uses C<sub>d</sub>(gap) interpolated from the measured map. That is
+      valid only because the gap closes far more slowly than the wake refreshes
+      — the timescale ratio is printed next to the result. This is a 2D
+      analogue; real cars live at Reynolds numbers ~10 000× higher where wakes
+      are turbulent and recover faster.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ================= §4 BIRDS ================= -->
+<section class="sec" id="birds">
+  <div class="sec-head"><span class="no">§4</span><h2>Why birds fly in V</h2></div>
+  <p class="sec-lede">
+    The aerial sibling of drafting — but fully 3D. Each wingtip sheds a
+    trailing vortex; just outboard of the leader's wingtips the air moves
+    <em>upward</em>. A trailing bird parked in that upwash gets free lift.
+    We measure the mechanism first, then the benefit.
+  </p>
+  <div id="birds-content"></div>
+  <details class="info">
+    <summary>Method and honesty notes</summary>
+    <div class="info-body">
+      <p class="plain">A real goose formation flies at Reynolds numbers in the
+      hundreds of thousands; our voxelized gliding bird flies at about 200. At
+      this scale the tip vortices are fat and diffuse quickly, so the study is
+      gated: first a single wing must show measurable lift above the force
+      noise (it did, or you would be reading that instead); then the wake plane
+      must show the textbook sign pattern — downwash between the tips, upwash
+      outboard; only then do we place trailing birds at the <em>measured</em>
+      upwash maximum, not the textbook wingtip offset, because at low Reynolds
+      the vortex line drifts inboard. The assert is on the mechanism and the
+      sign of the benefit; the magnitude at this Reynolds is reported as-is,
+      not extrapolated to real geese.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ================= §5 GALLERY ================= -->
+<section class="sec" id="gallery">
+  <div class="sec-head"><span class="no">§5</span><h2>Flow past real shapes — 3D gallery</h2></div>
+  <p class="sec-lede">
+    Five real 3D meshes — a race car, the Saturn V, an airplane, an ocean
+    liner, a gliding bird — voxelized onto the lattice and run in full 3D.
+    Each card pairs the computed flow with the actual model (drag to orbit) and
+    states the voxel resolution the solver really saw. Canonical shapes with
+    published numbers live in §6; these are the showcase.
+  </p>
+  <div class="gallery" id="gallery-grid"></div>
+</section>
+
+<!-- ================= §6 VALIDATION ================= -->
+<section class="sec" id="validation">
+  <div class="sec-head"><span class="no">§6</span><h2>Validation — every number, sourced</h2></div>
+  <p class="sec-lede">
+    The whole point. Solver correctness is proven on cases with exact or
+    published answers before any pretty picture is shown. Python values come
+    from the committed test suite and production runs; browser values from §2,
+    on your machine, just now.
+  </p>
+  <div class="table-scroll" id="validation-table"></div>
+</section>
+
+<!-- ================= §7 HOW IT WORKS ================= -->
+<section class="sec" id="how">
+  <div class="sec-head"><span class="no">§7</span><h2>How this simulation works</h2></div>
+  <div class="prose">
+    <p class="plain">
+      Instead of solving the airflow equations directly, a lattice-Boltzmann
+      solver plays a very fast, very simple board game. Space is a grid; on
+      each cell live nine little packets of air, each committed to one
+      direction (stay, the 4 compass points, the 4 diagonals). Every tick, two
+      things happen: packets <b>collide</b> — each cell nudges its packets
+      toward local equilibrium — and packets <b>stream</b> — each hops one
+      cell along its direction. That's the whole game. Do it millions of times
+      and honest-to-goodness fluid dynamics emerges: wakes, vortex streets,
+      drafting.
+    </p>
+    <h3>The actual equations</h3>
+    <p>BGK collision relaxes the populations f<sub>i</sub> toward equilibrium:</p>
+    <span class="math">f<sub>i</sub> ← f<sub>i</sub> + (f<sub>i</sub><sup>eq</sup> − f<sub>i</sub>)/τ,&nbsp;&nbsp;
+      ν = (τ − ½)/3</span>
+    <span class="math">f<sub>i</sub><sup>eq</sup> = w<sub>i</sub> ρ (1 + 3 c<sub>i</sub>·u
+      + 4.5 (c<sub>i</sub>·u)² − 1.5 |u|²)</span>
+    <p>Walls are half-way bounce-back: a packet that would enter a solid cell
+    is reflected at the midpoint, which is why every body is effectively one
+    cell fatter than its mask (we use that effective size consistently in both
+    Reynolds number and drag). Forces are momentum exchange — the exact
+    momentum handed to the body by every reflecting packet. The browser engine
+    runs the identical algorithm as WebGL2 fragment shaders, storing population
+    <em>deviations</em> to keep fp32 precision honest.</p>
+    <h3>What this is not</h3>
+    <ul class="limits">
+      <li>Not engineering-grade aerodynamics: real cars live at Re ~10⁷, we
+        run Re ~10²–10³. Wakes here are laminar and recover more slowly —
+        stated wherever it matters.</li>
+      <li>The live lab is 2D; the gallery and bird study are true 3D but at
+        modest voxel resolution (stated per card).</li>
+      <li>Low-Mach only: inflow ≤ 0.12 lattice units; the guardrails refuse
+        settings that would break this.</li>
+      <li>The ship is simulated fully immersed (wind-tunnel mode) — a free
+        water surface is a different, much harder simulation.</li>
+      <li>Drafting dynamics are quasi-static (aero map + ODE), valid because
+        the printed timescale ratio ≫ 1; cars do not move within a lattice run.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer class="colophon">
+  <div class="inner">
+    <h3>Colophon &amp; credits</h3>
+    <p>Solver, site and every run: pure NumPy + this page's JavaScript — no
+    fluid-dynamics libraries. 3D models by their authors under CC0/CC-BY —
+    see <a href="media/CREDITS.md">credits</a>. Built as a self-contained
+    page: no server, no network, no trackers.</p>
+  </div>
+</footer>
+
+<script src="data.js"></script>
+<script src="golden.js"></script>
+<script src="lbm-cpu.js"></script>
+<script src="lbm-gpu.js"></script>
+<script src="selfcheck.js"></script>
+<script src="vendor/three-bundle.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

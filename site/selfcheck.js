@@ -81,9 +81,8 @@ const SelfCheck = (() => {
     const cxc = (nx / 4) | 0, cyc = (ny / 2) | 0, r2 = (D / 2) * (D / 2);
     eng.setObstacle((x, y) =>
       ((x - cxc) * (x - cxc) + (y - cyc) * (y - cyc) <= r2) ? 2 : 0);
-    eng.initEquilibrium(1, (x, y) => 0, 0);
-    // start impulsively at U outside the cylinder (matches Python runner)
-    eng.initEquilibrium(1, (x, y) => U, 0);
+    // impulsive start at U everywhere outside the cylinder (matches Python)
+    eng.initEquilibrium(1, U, 0);
     const cl = [];
     const chunk = 100;
     for (let t = 0; t < steps; t += chunk) {
@@ -91,7 +90,10 @@ const SelfCheck = (() => {
       for (let s = 0; s < chunk; s++) {
         eng.step(1);
         const tt = t + s;
-        if (tt >= warmup) cl.push(eng.bodyForce(2).fy);
+        if (tt >= warmup) {
+          if (eng.syncForces) eng.syncForces();   // GPU: force pass + readback
+          cl.push(eng.bodyForce(2).fy);
+        }
       }
       if (progress) { progress(t / steps); await yieldUI(); }
     }
