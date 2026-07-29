@@ -19,8 +19,8 @@ from diagnostics import MomentumExchange
 from geometry import ahmed_body, from_mesh
 
 U = 0.08
-STEPS = 20000
-SAVE_EVERY = 100
+STEPS = 12000          # ~4.4 flow-throughs at 220 cells; tail-4k averaging
+SAVE_EVERY = 60
 MESHES = Path("assets/meshes")
 
 # per-object config: mesh file (None = procedural Ahmed), rotation to put the
@@ -73,6 +73,10 @@ def run_object(name, cfg, re_override=None):
     D_char = int(zs.max() - zs.min() + 1) if len(zs) else 20
     nu = U * D_char / Re
     tau = 3 * nu + 0.5
+    if tau < 0.555:            # fp32 stability floor: cap tau, report Re_eff
+        tau = 0.555
+        Re = round(3 * U * D_char / (tau - 0.5))
+        print(f"[{name}] tau floored at 0.555 -> effective Re={Re}", flush=True)
     wu = None
     if cfg["ground"]:
         wu = np.zeros((3,) + shape, np.float32); wu[0, :, :, 0] = U

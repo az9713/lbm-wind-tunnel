@@ -181,6 +181,23 @@ def test_cylinder_re100_strouhal():
 
 
 @pytest.mark.slow
+def test_ising_critical_temperature():
+    # Onsager exact: Tc = 2/ln(1+sqrt(2)) = 2.269; susceptibility peak +-3%
+    from ising import temperature_sweep, TC_EXACT
+    res = temperature_sweep(n=96, temps=np.arange(2.0, 2.62, 0.05), seed=3)
+    assert res["rel_err"] < 0.03, (res["Tc_measured"], TC_EXACT)
+
+
+@pytest.mark.slow
+def test_nbody_energy_conservation():
+    # leapfrog + softening: energy drift must stay under 2%
+    from nbody import run
+    drift = run(n_per=1500, steps=400, save_every=1000,
+                out_prefix="out/nbody_test")
+    assert drift < 0.02, drift
+
+
+@pytest.mark.slow
 def test_sphere_re100_drag():
     # Schiller-Naumann: Cd = 24/Re*(1+0.15*Re^0.687) = 1.09 at Re=100.
     # +-25% band: voxelization + 20%-per-side blockage both push Cd up.

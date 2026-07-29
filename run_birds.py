@@ -58,7 +58,7 @@ def run_sim(shape, masks, steps, sample_planes=(), tau=None):
     zs = np.nonzero(solid.any(axis=(0, 1)))[0]
     D_char = max(3, int(zs.max() - zs.min() + 1))
     nu = U * D_char / RE
-    tau = tau or 3 * nu + 0.5
+    tau = tau or max(3 * nu + 0.5, 0.555)   # fp32 floor; Re_eff reported
     u0 = np.zeros((3,) + shape, np.float32); u0[0] = U; u0[:, solid] = 0.0
     s = Solver(D3Q19, shape, tau, u_init=u0, solid=solid, inlet_u=U,
                dtype=np.float32)
