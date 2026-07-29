@@ -943,6 +943,14 @@
       title: "Gliding bird", mesh: "bird.glb",
       watch: "Wingtip vortices forming — the raw material of §4's formation physics.",
     },
+    hero_tandem: {
+      title: "Hero run: tandem drafting in full 3D", mesh: null,
+      watch: "The trailing body sits entirely inside the leader's wake — the 3D version of §3's headline effect, two Ahmed bodies over a moving road.",
+    },
+    hero_side: {
+      title: "Hero run: side-by-side in full 3D", mesh: null,
+      watch: "The channel between the cars and the asymmetric wakes behind them — the flow behind §3's side-force curve.",
+    },
   };
 
   function renderGallery() {
