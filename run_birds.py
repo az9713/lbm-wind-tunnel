@@ -148,7 +148,7 @@ def stage_baseline(shape=(200, 130, 84), steps=10000):
     return res
 
 
-def stage_formation(shape=(230, 150, 90), steps=12000):
+def stage_formation(shape=(230, 300, 90), steps=12000):
     base = json.load(open("out/birds_baseline.json"))
     span = base["span"]
     stagger = span                                     # ~1 span back
@@ -156,16 +156,24 @@ def stage_formation(shape=(230, 150, 90), steps=12000):
     m_lead, _ = bird_mask(shape, anchor=lead_anchor)
     m_lead = keep_largest_component(m_lead)
     ylo, yhi, zw, _ = wing_geometry(m_lead)
-    # place trailing birds' INNER wingtip at the measured upwash max offset
-    dy = base["upwash_max_at"][0] - base["y_tips"][1]   # outboard shift (hi side)
-    dz = base["upwash_max_at"][1] - int(round(base["z_wing"]))
+    # place trailing birds' INNER wingtip at the measured upwash max, which
+    # sits dy cells outboard of the NEAREST leader tip (either side — the
+    # baseline search covers both; sides are symmetric)
+    ymax, zmax = base["upwash_max_at"]
+    blo, bhi = base["y_tips"]
+    dy = (blo - ymax) if ymax < blo else (ymax - bhi)
+    dz = zmax - int(round(base["z_wing"]))
     tr_anchor = lead_anchor + stagger
     m_r, _ = bird_mask(shape, anchor=tr_anchor,
                        ycenter=yhi + dy + span / 2, zcenter=zw + dz)
     m_l, _ = bird_mask(shape, anchor=tr_anchor,
                        ycenter=ylo - dy - span / 2, zcenter=zw + dz)
     m_r, m_l = keep_largest_component(m_r), keep_largest_component(m_l)
-    if (m_lead & m_r).any() or (m_lead & m_l).any():
+    for m in (m_lead, m_r, m_l):                       # np.roll wraps: a bird
+        lo, hi, _, _ = wing_geometry(m)                # pushed past the edge
+        if hi - lo + 1 > span + 2:                     # smears across it
+            raise RuntimeError("bird mask wrapped around domain — widen ny")
+    if (m_lead & m_r).any() or (m_lead & m_l).any() or (m_r & m_l).any():
         raise RuntimeError("bird masks overlap — widen stagger")
     stats, _, _ = run_sim(shape, [m_lead, m_r, m_l], steps)
     iso = json.load(open("out/birds_baseline.json"))["stats"]
