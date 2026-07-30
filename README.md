@@ -11,13 +11,15 @@ Built and checked in **14 hours 41 minutes** of wall clock, in one day.
 
 ## See it run
 
-[<img src="docs/journey-assets/demo.gif" width="880" alt="Live simulation: two cars side by side shedding a vortex street, drag gauges updating in real time">](https://az9713.github.io/lbm-wind-tunnel/site/)
+[<img src="docs/journey-assets/demo.gif" width="880" alt="Live simulation: two cars side by side shedding a vortex street, drag gauges updating in real time">](https://az9713.github.io/lbm-wind-tunnel/demo.html)
+
+<sup>👆 Click the clip to play the full 95-second walkthrough.</sup>
 
 Two cars running side by side, shedding vortices, with the drag gauges updating as the
 flow evolves — all of it computed in the browser, in real time, by the same lattice-Boltzmann
 algorithm the Python engine uses.
 
-▶️ **[Full 95-second walkthrough](https://github.com/az9713/lbm-wind-tunnel/raw/main/docs/demo.mp4)** (1.7 MB) — every preset, the self-checks, and the paint-your-own-obstacle mode.
+▶️ **[Full 95-second walkthrough](https://az9713.github.io/lbm-wind-tunnel/demo.html)** (1.7 MB) — every preset, the self-checks, and the paint-your-own-obstacle mode.
 🎛️ **[Or just go and drive it yourself](https://az9713.github.io/lbm-wind-tunnel/site/).**
 
 ---
