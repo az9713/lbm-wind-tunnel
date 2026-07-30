@@ -18,7 +18,7 @@ browser.
 | Cylinder benchmarks | `run_cylinder2d.py` | Re=20 steady Cd in range; Re=100 St=0.1925 in lit. band |
 | Sphere drag | `tests/` (slow) | Schiller–Naumann Cd=1.09 ± 25% |
 | **Two-car drafting study** | `run_drafting.py`, `dynamics.py` | trailing-car saving vs platoon literature; emergent catch-up |
-| **3-bird V-formation study** | `run_birds.py` | gated: lift resolvable → tip-vortex sign pattern → L/D benefit |
+| **3-bird V-formation study** | `run_birds.py` | gated: lift resolvable (Cl 1.081±0.106 at 6° vs 0.125±0.006 at 0°) → tip-vortex sign pattern (up outboard, down between) → L/D benefit sign positive (trailing 0.4077 / 0.4083 vs isolated 0.3920, i.e. +4.0% and +4.2%) |
 | 3D gallery: race car, Saturn V, airplane, ocean liner, bird | `run_shapes3d.py`, `assets/meshes/` | qualitative + Ahmed-body Cd reported vs 1984 experiment |
 | Suite: Ising model, N-body galaxy merger | `ising.py`, `nbody.py` | Onsager Tc ± 3% (measured 0.91%); energy drift < 2% (measured ~0%) |
 | **Interactive site** (live WebGL2 + CPU-fallback engine) | `site/` | same three golden cases pass in-browser; St identical to Python |
