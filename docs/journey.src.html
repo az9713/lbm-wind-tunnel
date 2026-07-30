@@ -1,0 +1,984 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building a validated wind tunnel in a day — the development journey</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1b1a18; --muted: #5d5a54; --rule: #e0dcd4;
+    --accent: #8a3b1e; --card: #ffffff; --code-bg: #f3f0ea; --ok: #2f6a3f; --bad: #9c2b1f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14140f; --fg: #eae6dd; --muted: #a09a8e; --rule: #2f2d27;
+      --accent: #e08a5f; --card: #1c1b16; --code-bg: #211f1a; --ok: #7fbf8f; --bad: #e08070;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 17px/1.65 Georgia, "Iowan Old Style", "Times New Roman", serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 6rem; }
+  header { border-bottom: 2px solid var(--fg); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+  h1 { font-size: 2.1rem; line-height: 1.15; margin: 0 0 .6rem; letter-spacing: -.01em; }
+  .dek { color: var(--muted); font-size: 1.05rem; margin: 0; }
+  .meta { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+          font-size: .78rem; color: var(--muted); margin-top: 1.1rem; letter-spacing: .02em; }
+  h2 { font-size: 1.45rem; margin: 3.2rem 0 .4rem; letter-spacing: -.01em; }
+  h2 .num { color: var(--accent); font-family: ui-monospace, monospace; font-size: .8em; margin-right: .5rem; }
+  h3 { font-size: 1.12rem; margin: 2.2rem 0 .3rem; }
+  h4 { font-size: .95rem; margin: 1.4rem 0 .2rem; color: var(--accent);
+       font-family: ui-monospace, monospace; font-weight: 600; letter-spacing: .01em; }
+  p { margin: .8rem 0; }
+  a { color: var(--accent); }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .86em; }
+  code { background: var(--code-bg); padding: .1em .35em; border-radius: 3px; }
+  figure { margin: 2rem 0; }
+  figure img, figure video { width: 100%; display: block; border-radius: 4px; background: #000; }
+  figcaption { font-size: .85rem; color: var(--muted); margin-top: .5rem; line-height: 1.5; }
+  .fig-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  .fig-row figure { margin: 0; }
+  .tablewrap { overflow-x: auto; margin: 1.5rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem;
+          font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  .bug { background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+         border-radius: 4px; padding: 1.1rem 1.3rem; margin: 1.8rem 0; }
+  .bug h3 { margin-top: 0; }
+  .bug dl { margin: .8rem 0 0; }
+  .bug dt { font-family: ui-monospace, monospace; font-size: .74rem; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--muted); margin-top: .9rem; }
+  .bug dd { margin: .2rem 0 0; }
+  pre { background: var(--code-bg); border-radius: 4px; padding: .9rem 1rem; overflow-x: auto;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .8rem; line-height: 1.5; margin: 1rem 0; }
+  blockquote { margin: 1.5rem 0; padding-left: 1.1rem; border-left: 3px solid var(--rule);
+               color: var(--muted); font-style: italic; }
+  .lede::first-letter { float: left; font-size: 3.1rem; line-height: .82; padding: .1rem .5rem .1rem 0; color: var(--accent); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+  .foot { font-size: .85rem; color: var(--muted); margin-top: 4rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; }
+  ul { padding-left: 1.2rem; } li { margin: .4rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>A wind tunnel, built and checked in one day</h1>
+  <p class="dek">How a lattice-Boltzmann fluid simulator went from a blank folder at 6am
+  to a validated study of why the second race car catches the first and why geese fly in a V —
+  including the four sign-and-axis bugs that nearly sold three wrong answers.</p>
+  <p class="meta">2026-07-29 · 06:04 → 20:45 local · <strong>14h 41m wall clock</strong> · 40 commits ·
+  21 tests passing, 1 expected failure</p>
+</header>
+
+<p class="lede">The question that started this was small enough to ask over coffee: why does the second
+car in a race catch up to the first one without trying harder? The honest answer needs a fluid
+simulator, and a fluid simulator that hasn't been checked against known answers is a screensaver.
+So the day had a shape before it had any code — prove the solver on problems with exact published
+answers first, and only then point it at anything interesting.</p>
+
+<p>What follows is the whole development journey, reconstructed from what the project actually left
+behind: 40 git commits, the plan and pre-mortem documents written before the first slow test,
+the raw measurement logs in <code>out/</code>, and the session transcripts. Every number here is
+one that was measured and is still on disk. The most interesting parts are the bugs.</p>
+
+<h2><span class="num">01</span> The walk: 52 minutes, five rewrites, no code</h2>
+
+<p>Nothing in this project was typed before 07:08. The hour before it was a conversation held on a
+morning walk — most of the messages were dictated, and the transcript wears it plainly: they arrive
+full of "uh", and at one point the speech-to-text renders "cylinders and spheres" as
+<em>"Silyta's Spheres"</em>. It is also, in hindsight, where the project was actually built. Five
+times in fifty-two minutes the plan was torn up and rewritten, and every one of those rewrites came
+from the walk, not from the keyboard.</p>
+
+<h4>06:08 — the constraint, not the idea</h4>
+<p>It did not start with fluids. It started with a budget:</p>
+<blockquote>"check my <code>/usage</code>. propose a project to use up all credits before reset in 14
+hours. ideally, it is a project that i have never attempted before. do not run yet. just
+propose."</blockquote>
+
+<p>The first proposal was a Game Boy emulator — a Sharp LR35902 CPU, ~500 opcodes, verified against
+Blargg's <code>cpu_instrs</code> test ROM, with Tetris booting as the finish line. It was chosen for
+exactly the reasons that survived into the project that eventually got built: it had objective
+pass/fail ground truth, and it decomposed into many small checkable pieces.</p>
+
+<p>Then a small friction that turned out to matter. Asked to read <code>/usage</code>, I explained I
+couldn't — it renders a dialog to the user and returns nothing to me. Rather than let it drop, the
+dialog was pasted in verbatim, and the numbers rewrote the plan's scale on the spot:</p>
+
+<pre>Current week (all models)   ██████████████████████████  90% used
+Current week (Fable)        ██████████████              50% used
+Resets Jul 29, 8pm (America/Los_Angeles)
+
+75% of your usage came from subagent-heavy sessions
+51% of your usage was at &gt;150k context</pre>
+
+<p>The Fable bucket at 50% looked like room to move, but it was a decoy: the all-models cap at
+<strong>90%</strong> is the one that blocks everything, so the real budget was the last ~10% of a
+week, expiring at 8pm that evening. "Use up all credits" quietly became "spend a few good hours,"
+and the plan shrank to a CPU core with graphics as a stretch goal. That number is why the eventual
+plan carries a budget rule and two checkpoints in its header.</p>
+
+<h4>06:13–06:15 — two questions that killed the emulator</h4>
+<p>Two short questions did the work: <em>"what can i expect upon completion"</em> and
+<em>"will i have a UI to play games"</em>. The honest answer to the second was <em>maybe</em> — a
+guaranteed CPU core that passes a test ROM, with a playable window as a gamble. That answer clearly
+wasn't the day anyone wanted, and the next message changed the subject entirely:</p>
+<blockquote>"ok. how about some scientific simulations which are computationally intensive"</blockquote>
+
+<h4>06:16 — the observation the whole project is shaped around</h4>
+<p>This deserved a correction before an agreement, because the request contained a false assumption:
+<strong>local compute doesn't burn credits.</strong> A simulation grinding away on your own machine
+for six hours costs nothing; tokens are spent on writing the code, validating the physics, and
+explaining the results. So the ideal project is one where the expensive-for-me part is
+<em>building and checking</em>, and the expensive-for-the-computer part runs in the background for
+free.</p>
+
+<p>That is the exact shape of what got built. It is why the 3D gallery and the hero runs are
+background jobs, why the day's clock is mostly compute rather than conversation, and why the final
+tally is 432 MB of flow fields produced at zero token cost.</p>
+
+<p>The recommendation that followed was lattice Boltzmann flow past a cylinder — picked because the
+von Kármán vortex street has an objective, published answer to check against (Strouhal number
+≈0.16–0.2), because it renders as genuinely beautiful video, and because the Ising model and an
+N-body galaxy collision were sitting there as budget-filler extensions with their own exact
+references. All three shipped.</p>
+
+<h4>06:18 — the first plan</h4>
+<blockquote>"great write a implementation plan for the fluid dynamics simulator (Lattice Boltzman
+method). it should show flows past not just a cylinder but also other 3d geometric shapes. if budget
+still allows, proceed to a suite. please plan first, before execute."</blockquote>
+<p>Plan v1, written at 06:21, covered a 2D validated core, a 3D D3Q19 extension with sphere drag
+checked against the Schiller–Naumann correlation, a gallery of <em>sphere, cube, cone and torus</em>,
+a Reynolds sweep, an HTML report, and the suite as a budget-gated extra. Then the rewrites started.</p>
+
+<h4>The five revisions, each one a message from the walk</h4>
+
+<p><strong>Revision 1 (06:26) — "not ideal geometry."</strong> The request was to replace cylinders
+and spheres with cars, rockets, airplanes, maybe ships. The answer had to push back partway, and the
+compromise became a load-bearing principle of the whole project: <em>the canonical shapes stay, but
+demoted to test fixtures.</em> They are the only geometries with exact published answers, so they are
+how the solver proves it isn't lying; the realistic objects are the showcase. The Ahmed body — the
+standard simplified car from automotive CFD — came in as the bridge between the two, being both
+realistic-ish and published. Two honesty notes were added to the plan header in the same edit: the
+Reynolds-number gap, and the ship being simulated fully immersed.</p>
+
+<p><strong>Revision 2 (06:30) — "so they get coupled through dynamics. Can this be done?"</strong>
+This is the request that produced the project's headline. The answer split one question into two,
+because they have very different price tags. <em>Aerodynamic</em> coupling — one car's wake changing
+the forces on the other — is free: two masks in one domain with separate force accounting.
+<em>Motion</em> coupling — the cars actually responding and moving — needs boundaries that translate
+through the lattice, which is a serious build. The way out was a two-stage split: measure the
+force-versus-gap map from static runs, then integrate the two cars' equations of motion using that
+measured map. The catch-up then has to <em>emerge</em> rather than being animated, which is a
+stronger result than the one originally asked for, and it is precisely what the 34-time-unit
+gap-closing plot later showed. The moving-boundary work was declared out of scope in writing, in the
+same breath, and stayed out.</p>
+
+<p><strong>Revision 3 (06:36) — the four non-negotiables.</strong> The longest dictated message of
+the morning, and the one that set the standard everything else was held to: the science must be as
+rigorous as possible with <em>no watering down</em>; results must be shown in a visually pleasing,
+easy-to-understand way; the user must be able to experiment with parameters directly; and the
+explanations must be plain without sacrificing rigor — "I'm not a graphic designer. I'm not a website
+designer. So make the resulting website very intuitive to use."</p>
+
+<p>Two demands there are in tension, and resolving them forced the single biggest architectural
+decision of the day: <strong>two engines, one physics.</strong> The Python engine produces every
+validated number; the website gets its own lattice-Boltzmann engine ported to WebGL so it runs live
+on the GPU — and it has to prove itself against the Python results in a self-check panel the user can
+press. Interactivity is real-time 2D; rigorous 3D is precomputed and embedded. Live rigorous 3D in a
+browser was not honest on that hardware, and saying so was cheaper than faking it. The same message
+is why the plan mandates design skills before any UI code and puts a priority ladder in the header:
+if budget ran short, the 3D gallery shrinks and the site survives — not the other way around.</p>
+
+<p><strong>Revision 4 (06:41) — the birds.</strong> A request for an ocean liner, and then something
+better: "include birds, flying birds… maybe three birds flying in a triangular formation," with their
+airflows coupled. This one came with real published science attached — V-formation energy saving
+measured in actual ibis flocks (Portugal et al., 2014) — and two constraints that shaped the study
+that finally ran eight hours later. Wingtip vortices are inherently three-dimensional, so a 2D wing
+has no tips and the live site's formation preset had to be labelled a 2D analogue, with the real
+study precomputed in 3D. And the birds would glide rather than flap, since flapping is the
+moving-boundary problem already ruled out — which is fine, because gliding is exactly how the classic
+formation-flight theory papers model it.</p>
+
+<p>The same reply added an <em>overclaiming ban</em>, in writing, before a single bird had been
+simulated: the assertion would be on the mechanism and the <em>sign</em> of the benefit, and if the
+magnitude turned out to be within measurement noise, the report would say so with the numbers. "No
+watering down" cuts both ways. That clause is the direct ancestor of the go/no-go gate that later
+stopped the study twice and refused to report a result until the wing could be shown to generate
+measurable lift.</p>
+
+<p><strong>Revision 5 (06:48) — "do not render the bird as simple triangles."</strong> The
+requirement was that the objects be realistically rendered <em>and</em> that the simulation be based
+on realistic geometry. That promoted mesh import from an optional extra to a required task: real
+CC-licensed models, voxelized through <code>trimesh</code> for the solver. It also created a trap
+worth naming out loud, which the plan then had to handle: at lattice resolution a voxelized car has
+no mirrors and no door handles, so the site shows the smooth orbitable mesh while the solver saw
+something much coarser. Displaying the pretty mesh is standard practice; hiding the difference would
+have broken non-negotiable #1, so every caption states the voxel resolution the solver actually
+resolved.</p>
+
+<h4>06:44–06:54 — asking for the unknown unknowns</h4>
+<p>Between those last two revisions came the request that changed the project's odds more than any
+feature did:</p>
+<blockquote>"Since I'm not very familiar with fluid dynamics, and I'm also not a website designer,
+there are a lot of unknown unknowns to me about these topics… Can you survey some unknown unknowns
+for this project? Because I may have a lot of blind spots, and surfacing them can help me improve our
+plan."</blockquote>
+
+<p>A background survey ran across the whole stack — LBM numerics, CFD validation practice, WebGL, UI
+design — and came back with a reframe that turned out to be the thesis of the entire day:
+<strong>passing the physics tests proves the solver is correct, not that the experiments mean what
+they appear to mean.</strong> The danger was never crashing code; it was plausible-looking wrong
+numbers. Three sources dominated, and all three are visible in the finished project:</p>
+
+<ul>
+  <li><strong>The walls of the box are part of the experiment.</strong> A cylinder filling ~12% of
+  the channel inflates drag by 10–20% against open-air textbook values. This is why every drag number
+  in this project is reported with its blockage ratio attached, and why the Strouhal number of 0.1925
+  is presented as blockage-shifted rather than quietly compared to 0.164.</li>
+  <li><strong>Low Reynolds number breaks imported expectations — on real physics, not bugs.</strong>
+  A laminar slipstream lasts <em>longer</em> than a turbulent one, so the trailing car's savings could
+  persist further than the racing literature suggests. That single sentence, written at 06:54,
+  predicted the one test that fails in the final suite, and is why it fails as a documented expected
+  failure rather than a crisis. The survey's remedy is the <strong>pre-mortem</strong>: before
+  running anything slow, write down for every test what a failure would mean — bug, known systematic
+  error, or genuine physics. Four rows of that table were later marked CONFIRMED, and it is the
+  single most valuable document the project produced.</li>
+  <li><strong>A drag value in a shedding wake is a distribution, not a number.</strong> Hence mean ±
+  spread over whole shedding cycles everywhere, and unit tests for the measurement code itself on
+  synthetic signals — "the diagnostics are half the epistemics, and the cheaper place to debug."</li>
+</ul>
+
+<p>The survey also caught three web-specific traps before they were built: dragging a car with the
+mouse is secretly the moving-boundary problem in disguise (fixed with honest UX — force gauges grey
+out until the flow settles); some laptop GPUs only do half-precision arithmetic, which would fail the
+self-checks while the animation still looked perfect (fixed by storing population deviations and
+declaring "visual-only mode" rather than pretending); and cross-engine agreement should ship as three
+pinned golden cases anyone can press a button to re-run, not as a claim in a paragraph. And it
+flagged that the road under the cars should <em>move</em> with the flow — the physically correct
+frame for a car on a road, which also avoids a spurious floor boundary layer choking the underbody.
+That became commit <code>dc45f23</code> at 07:40.</p>
+
+<h4>07:00 — the state at the end of the walk</h4>
+<p>Commit <code>1bc20aa</code>: the plan, the blind-spot report, a handoff file, and a
+<code>.gitignore</code>. Zero lines of simulator code. Five revision rounds, four non-negotiables, a
+pre-mortem requirement, an overclaiming ban, and a priority ladder — all written down before the
+first test was ever run. The handoff closed with an honest flag that the real risk was the clock
+rather than anything technical, and with one question still unanswered: whether execution should run
+as subagents in that session or as a separate parallel session. It never did get answered. Thirteen
+hours later it didn't matter.</p>
+
+<h2><span class="num">02</span> The arc</h2>
+
+<p>The day ran in one long line with three interruptions. The walk turned a vague "simulate fluids"
+into a written spec, and at <span class="mono">06:59</span> the first commit landed: the
+implementation plan, a blind-spot pass, and a resume point. Binding on everything after it was the
+plan's <strong>measurement and honesty protocol</strong>. Its first clause required the
+<em>pre-mortem</em>: before running any slow test, write down for every validation
+row the most likely way a bug could produce a wrong answer, the most likely way real physics or the
+discretization could produce the same wrong answer, and the cheapest check that tells those two
+apart. That table is <code>docs/pre-mortem.md</code>, and it was consulted before debugging every
+single red assert that followed. Four of its rows ended the day marked CONFIRMED.</p>
+
+<p>Then the solver, built bottom-up in roughly ten minutes per layer, each layer with its own test:</p>
+
+<div class="tablewrap">
+<table>
+<tr><th>Time</th><th>Commit</th><th>What landed</th></tr>
+<tr><td class="mono">07:08</td><td class="mono">4e40e5a</td><td>D2Q9 lattice + equilibrium, with moment identities as tests</td></tr>
+<tr><td class="mono">07:09</td><td class="mono">74f7dab</td><td>Periodic streaming</td></tr>
+<tr><td class="mono">07:10</td><td class="mono">745b00a</td><td>BGK collision, validated on Taylor–Green decay</td></tr>
+<tr><td class="mono">07:11</td><td class="mono">371ec1b</td><td>Bounce-back walls + body force, Poiseuille-validated</td></tr>
+<tr><td class="mono">07:24</td><td class="mono">6d8f7f5</td><td>Open-flow boundaries, obstacle masks, momentum-exchange forces <span class="bad">← bug #1 caught here</span></td></tr>
+<tr><td class="mono">07:28</td><td class="mono">8e577fc</td><td>Vorticity video rendering; D3Q19 lattice, solver validated in 3D</td></tr>
+<tr><td class="mono">07:34</td><td class="mono">bec73a5</td><td>Real-mesh voxelization (trimesh), Ahmed body, sphere drag test</td></tr>
+<tr><td class="mono">07:40</td><td class="mono">dc45f23</td><td>Moving-wall bounce-back (the road moves with the car), per-body force partition test</td></tr>
+<tr><td class="mono">07:44</td><td class="mono">cd2cc25</td><td>Re=100 vortex street, Strouhal-validated; drafting sweep runner</td></tr>
+<tr><td class="mono">07:45</td><td class="mono">1707a4a</td><td>Drafting dynamics: RK4 on the measured aerodynamic map</td></tr>
+<tr><td class="mono">07:57</td><td class="mono">d51aa12</td><td>Verified mesh orientations — axis permutations and flips, checked geometrically</td></tr>
+<tr><td class="mono">08:48</td><td class="mono">b36b4a1</td><td>In-browser LBM engines: CPU plus a WebGL2 deviation-form GPU engine</td></tr>
+<tr><td class="mono">08:56</td><td class="mono">df2e498</td><td>The interactive site — sliders, presets, gauges, charts, live self-checks</td></tr>
+<tr><td class="mono">09:19</td><td class="mono">8d0af40</td><td>Fused per-direction numpy step + numba kernels: 50× on 3D grids</td></tr>
+<tr><td class="mono">09:29</td><td class="mono">2121a3e</td><td>Suite extension: Ising model (Onsager-validated) and an N-body galaxy merger</td></tr>
+<tr><td class="mono">10:32</td><td class="mono">1cdbc2f</td><td>Lift axis fix in 3D <span class="bad">← bug #2</span></td></tr>
+<tr><td class="mono">12:03</td><td class="mono">34572a1</td><td>Handoff refresh after the tooling restarted; long runs relaunched</td></tr>
+<tr><td class="mono">14:57</td><td class="mono">30e3594</td><td>Bird gate control rotated about the wrong axis <span class="bad">← bug #3</span></td></tr>
+<tr><td class="mono">18:12</td><td class="mono">a9f5f14</td><td>Formation placement sign error <span class="bad">← bug #4</span></td></tr>
+<tr><td class="mono">20:36</td><td class="mono">5eeaf8e</td><td>V-formation study complete; benefit sign positive</td></tr>
+</table>
+</div>
+
+<p>Notice the shape of that table. The first three hours produced fourteen commits; the last eight
+hours produced six. That is not a slowdown in effort — it is what it looks like when the cheap,
+checkable work is done and the remaining time belongs to long 3D runs and to finding out that three
+of them had been computing the wrong thing.</p>
+
+<figure>
+  <video src="ASSET:site/media/cylinder_re100.mp4" autoplay loop muted playsinline></video>
+  <figcaption><strong>The first real result.</strong> Flow past a cylinder at Reynolds number 100 —
+  the classic von Kármán vortex street, alternating vortices peeling off each side. This run measured
+  a Strouhal number (the dimensionless shedding frequency) of <strong>0.1925</strong>, drag
+  coefficient 1.458 ± 0.009, in a channel with 13.75% blockage. It is the golden case the browser
+  engine had to reproduce later, and it did, to the same four digits.</figcaption>
+</figure>
+
+<h2><span class="num">03</span> Four bugs, and the checks that caught them</h2>
+
+<p>Every one of these produced a number that looked plausible. None of them crashed anything. Three
+of the four were the same underlying mistake — a confusion about which axis is which in 3D — which
+is now written into the project's handoff notes as the first thing to suspect in any future 3D work
+here.</p>
+
+<div class="bug">
+<h3>Bug #1 — the force meter read 2.18× too high</h3>
+<dl>
+  <dt>Symptom</dt>
+  <dd>The very first drag numbers were too large. Not wildly, absurdly large — just <em>high</em>,
+  the kind of high you can talk yourself into by blaming blockage or resolution.</dd>
+  <dt>The discriminating check</dt>
+  <dd>Pressure-driven flow through a channel has an exact bookkeeping identity: in steady state, the
+  total drag the walls exert on the fluid must equal the total body force pushed into the fluid,
+  <code>g × N_fluid</code>, precisely. No literature value, no tolerance argument, no regime caveat —
+  the two numbers either match or the force code is wrong. They didn't match; the ratio was
+  <strong>2.18</strong>.</dd>
+  <dt>Fix</dt>
+  <dd>The naive "full-way" bounce-back momentum-exchange formula double-counts. Replaced with
+  half-way bounce-back and the exact Ladd pairing (commit <code>6d8f7f5</code>, 07:24). The
+  Poiseuille balance became a permanent test that runs in seconds, and the pre-mortem's general rule
+  came out of it: <em>the force pipeline is the first suspect for any drag anomaly, and it has an
+  exact self-check — run it first.</em></dd>
+</dl>
+<p>This one mattered out of proportion to its size. Had it survived another twenty minutes, it would
+have been baked into the cylinder benchmark, and every later number would have inherited a silent
+factor of two.</p>
+</div>
+
+<div class="bug">
+<h3>Bug #2 — "lift" was actually side force</h3>
+<dl>
+  <dt>Symptom</dt>
+  <dd>The bird study opens with a go/no-go gate: before asking whether formation flight helps, prove
+  the simulator can measure lift on a single wing at all. Tilt one bird to 6° angle of attack, and the
+  lift coefficient should rise clearly above the zero-tilt case. It read approximately
+  <strong>zero, plus noise</strong>. Physically, that would have meant a wing that doesn't generate
+  lift, which would have killed the whole formation study.</dd>
+  <dt>The discriminating check</dt>
+  <dd>The pre-mortem row for bird wake signs had already named the suspect: an axis swap in 3D. And
+  the code confessed on inspection — <code>coefficients()</code> returned <code>F[1]</code> as lift.
+  In 2D that is the vertical axis and correct; in 3D it is the sideways axis. A wing at angle of
+  attack generates almost no sideways force, so the function was faithfully reporting a number that
+  was genuinely near zero and completely irrelevant.</dd>
+  <dt>Fix</dt>
+  <dd>Return <code>F[-1]</code> — the last axis, which is "up" in both 2D and 3D — with a docstring
+  saying so (commit <code>1cdbc2f</code>, 10:32). Cost: the bird study and three gallery runs
+  (airplane, ship, bird) had to be restarted from scratch on the corrected code.</dd>
+</dl>
+<pre>-        return F[0] / denom, F[1] / denom
++        return F[0] / denom, F[-1] / denom</pre>
+</div>
+
+<div class="bug">
+<h3>Bug #3 — the control bird was also flying at 6°</h3>
+<dl>
+  <dt>Symptom</dt>
+  <dd>With the lift axis fixed, the gate ran again — and <em>failed again</em>. This is the moment
+  where it would have been easy to conclude that the simulator simply cannot resolve lift at this
+  resolution and quietly drop the formation study. The logs show why it failed:</dd>
+</dl>
+<pre>[gate aoa]  Cd 2.761   Cl 1.081 ± 0.106   A=382
+[gate zero] Cd 2.660   Cl 1.050 ± 0.106   A=399
+[gate] FAIL — stop, report honestly</pre>
+<dl>
+  <dt>The discriminating check</dt>
+  <dd>The tilted wing and the supposedly level wing were producing <em>the same lift</em> — 1.081 vs
+  1.050. Two readings that agree are not noise; they are the same experiment run twice. So the
+  suspicion moved from the physics to the geometry, and the check was pure geometry: measure the
+  slope of the wing mask along the flow direction, no solver involved, seconds instead of hours. The
+  "zero angle of attack" control measured <strong>−4.34°</strong>, not 0°.</dd>
+  <dt>Fix</dt>
+  <dd>The control was built by counter-rotating the wing to cancel its tilt, but it rotated about the
+  <code>y</code> axis while the angle of attack pitches about <code>x</code>. The control had never
+  been levelled; it was still flying at roughly 6°, which is exactly why it produced the same lift.
+  Changed to <code>("x", -AOA)</code> (commit <code>30e3594</code>, 14:57), and the geometric
+  pitch-check became a precondition that runs before any bird job.</dd>
+  <dt>What it looked like afterwards</dt>
+  <dd>Gate PASS: 6° gives Cl <strong>1.081 ± 0.106</strong>, level gives
+  <strong>0.125 ± 0.006</strong>. An eight-fold difference, far above the noise. Lift is resolvable.</dd>
+</dl>
+</div>
+
+<div class="bug">
+<h3>Bug #4 — both trailing birds were placed in the same spot</h3>
+<dl>
+  <dt>Symptom</dt>
+  <dd>The first full three-bird run returned lift-to-drag ratios of <strong>37.5</strong> and
+  <strong>−200.9</strong> for the two trailing birds, against 0.392 for a bird flying alone. Not
+  subtly wrong — nonsense. The intermediate drag readings were the giveaway: the two trailing birds
+  logged drag coefficients of −0.106 and 0.045, essentially nothing, as though they were barely in
+  the flow at all.</dd>
+  <dt>The discriminating check</dt>
+  <dd>Compare the placement arithmetic against the measured wake. Each trailing bird is positioned
+  outboard of a leader wingtip, where the upwash is; the leader's wingtips sat at lattice positions
+  19 and 109, and the measured upwash maximum was at <strong>y = 12</strong> — outboard of the
+  <em>low</em> tip. The code assumed the maximum would be on the high side, so it computed the offset
+  as −97 instead of +7, and both birds landed on top of each other in the middle of the domain,
+  overlapping the leader. Two bodies sharing lattice cells is why the force partition returned
+  garbage.</dd>
+  <dt>Fix</dt>
+  <dd>Measure the offset from the <em>nearest</em> tip rather than an assumed side, add an explicit
+  trailing-vs-trailing overlap check and a wrap-around guard, and widen the domain from 150 to 300
+  cells across — three 91-cell wingspans never fit in 150 in the first place (commit
+  <code>a9f5f14</code>, 18:12).</dd>
+</dl>
+</div>
+
+<h4>The pattern</h4>
+<p>Three of these four were axis or sign confusions in 3D geometry, and none of them announced
+themselves as errors — they produced numbers. What caught every one of them was the same discipline:
+a cheap check that can only come out one way if the code is right. An exact conservation identity for
+the force meter. Two readings that must differ for the gate. A geometric slope measured on masks
+alone for the control. Placement arithmetic compared against a measured wake for the formation. None
+of these needed a long simulation to run; the expensive part was noticing that a plausible number
+deserved one.</p>
+
+<div class="fig-row">
+  <figure>
+    <img src="ASSET:out/mesh_orient.png" alt="Six mesh silhouettes shown in their solver orientation">
+    <figcaption>Mesh orientations verified geometrically at 07:57, before any production run — the
+    same class of check that later caught bug #3.</figcaption>
+  </figure>
+  <figure>
+    <img src="ASSET:out/aoa_check.png" alt="Wing mask profile used for the angle-of-attack check">
+    <figcaption>The angle-of-attack check on the wing mask. Measuring the mask's slope along the flow
+    is what proved the "level" control bird was tilted 4.34° the wrong way.</figcaption>
+  </figure>
+</div>
+
+<h3>The near-misses — things caught before they became bugs</h3>
+
+<p>The four confirmed bugs are the dramatic part, but most of the day's defensive work never produced
+a failure at all, which is the point of it. Five worth naming:</p>
+
+<ul>
+  <li><strong>Mesh orientations, verified at 07:57</strong> (<code>d51aa12</code>) — before any
+  production run, every voxelized mesh was checked for the right axis permutation and flips. Cheap,
+  boring, and the same class of geometric check that later caught bug #3. Skipping it would have
+  meant discovering a sideways rocket after a 30-minute run instead of before one.</li>
+  <li><strong>The canvas that photographed blank</strong> (<code>9b4a2a0</code>, 10:17) — automated
+  screenshots of the live site came back empty because the capture path didn't tolerate synthetic
+  pointer events. Not a physics bug, but it broke the day's central rule — verify by observing
+  effects — so it had to be fixed before any "the site works" claim could be made honestly.</li>
+  <li><strong>Self-checks that stalled when you looked away</strong> (<code>4a6afe2</code>, 09:41) —
+  browsers throttle timers in hidden tabs, so the in-page validation could appear to hang. Reworked
+  to yield through a <code>MessageChannel</code>, with a queue so two checks can't run at once and a
+  pause on the live lab so they don't fight for the GPU.</li>
+  <li><strong>The accessibility and contrast pass</strong> (<code>91ba21e</code>, 09:47) — mobile
+  overflow and muted-ink contrast fixed while the site was still small enough for that to be a
+  ten-minute job.</li>
+  <li><strong>The Chrome cache trap</strong> — this one cost real time and produced no commit. After
+  editing the site's JavaScript, Chrome kept serving the old file through a normal reload, through
+  <code>location.reload(true)</code>, <em>and</em> through a changed query string — while a
+  cache-busting <code>fetch</code> of the same file returned the new contents. So the server looked
+  correct, the file on disk was correct, and the page was running last hour's code. Only a hard
+  reload (ctrl+shift+r) picks it up. It is now the first line of the project's handoff notes.</li>
+</ul>
+
+<h2><span class="num">04</span> What was actually measured</h2>
+
+<p>Every number below is a measurement that exists in <code>out/</code>, with the context the honesty
+protocol required: the blockage ratio, the frontal area counted in voxels, the effective diameter,
+and a mean ± standard deviation over a whole number of shedding cycles after the startup transient.</p>
+
+<h3>The solver, proven on problems with known answers</h3>
+<div class="tablewrap">
+<table>
+<tr><th>Check</th><th class="num">Measured</th><th>Reference</th><th>Reading</th></tr>
+<tr><td>Equilibrium moments</td><td class="num">exact to 1e-6</td><td>algebraic identity</td><td class="ok">pass</td></tr>
+<tr><td>Taylor–Green decay</td><td class="num">within 2%</td><td>analytic solution</td><td class="ok">pass</td></tr>
+<tr><td>Poiseuille profile</td><td class="num">within 2%</td><td>analytic parabola</td><td class="ok">pass</td></tr>
+<tr><td>Wall drag = body force</td><td class="num">1e-4</td><td>exact bookkeeping</td><td class="ok">pass</td></tr>
+<tr><td>Cylinder Re=20 drag</td><td class="num">2.437 ± 0.004</td><td>2.0–2.2 unbounded</td><td>higher, as 13.75% blockage predicts</td></tr>
+<tr><td>Cylinder Re=100 Strouhal</td><td class="num">0.1925</td><td>≈0.164 unbounded; assert band 0.14–0.20</td><td class="ok">pass, blockage-shifted</td></tr>
+<tr><td>Sphere Re=100 drag</td><td class="num">1.324</td><td>Schiller–Naumann 1.09 ± 25% → 0.82–1.36</td><td class="ok">inside, near the top</td></tr>
+<tr><td>Ising critical temperature</td><td class="num">0.91% off</td><td>Onsager exact 2.2692</td><td class="ok">inside ±3%</td></tr>
+<tr><td>N-body energy drift</td><td class="num">0.001%</td><td>conservation, 20k particles</td><td class="ok">inside 2%</td></tr>
+<tr><td>Browser engine vs Python</td><td class="num">St identical</td><td>same three golden cases</td><td class="ok">pass</td></tr>
+</table>
+</div>
+
+<figure>
+  <img src="ASSET:docs/journey-assets/site_validation.png" alt="The site's validation ledger table">
+  <figcaption>The same ledger as it appears on the site, where the caveats are part of the table
+  rather than a footnote: the asterisk explaining that laminar bluff-body drag is ~10× the turbulent
+  value, the blockage percentage next to each cylinder row, and the browser-measured values sitting
+  beside the Python ones in the same column.</figcaption>
+</figure>
+
+<p>Two footnotes an honest ledger has to carry. The Strouhal number, 0.1925, is above the textbook
+unbounded-flow value of about 0.164 — that is the 13.75% channel blockage, which squeezes the flow
+and speeds up shedding, and it is reported with the blockage attached rather than trimmed to look
+like the textbook. And the Ising figure of 0.91% comes from the production sweep quoted on the site;
+the smaller sweep the test suite re-ran at 20:17 (96×96 lattice) landed at 0.65%. Both sit
+comfortably inside the ±3% tolerance, and the difference is finite-size effects, not disagreement.</p>
+
+<h3>Why the second car catches the first</h3>
+
+<figure>
+  <img src="ASSET:out/drafting_strip.png" alt="Three vorticity snapshots showing two cars at increasing gaps">
+  <figcaption>The same two cars at three separations: a quarter of a car length, one length, and
+  three lengths. At the close gap the trailing car sits entirely inside the leader's wake and barely
+  meets any oncoming air.</figcaption>
+</figure>
+
+<p>A gap sweep measured the drag on both cars at seven separations. A car on its own carries a drag
+coefficient of <strong>2.291</strong>. At a quarter-length gap the trailing car reads
+<strong>0.744</strong> — a <strong>68% saving</strong> — while the leader reads 2.281, essentially
+unchanged from flying alone (the leader's small benefit from having a follower is real but tiny here,
+about half a percent). The saving decays with distance exactly as it should: 62% at half a length,
+53% at one length, 35% at two, and still 22% at three lengths.</p>
+
+<p>Side by side is the opposite trade. Two cars a quarter-length apart laterally both read
+<strong>2.913</strong>, 27% <em>worse</em> than flying alone, and they push each other apart with a
+side force of ±5.66. Running abreast costs you; running behind pays.</p>
+
+<figure>
+  <img src="ASSET:out/dynamics.png" alt="Gap and speed traces showing the trailing car closing on the leader">
+  <figcaption><strong>The catch-up is emergent, not scripted.</strong> Feeding the measured drag map
+  into the cars' equations of motion — identical engines, identical drivers — the trailing car closes
+  from a three-length gap to a quarter length in 34 time units, then holds station. Nobody told it to
+  accelerate; less drag simply means more net thrust.</figcaption>
+</figure>
+
+<p>This result comes with a condition attached that the plan required to be printed next to it. The
+map treats each gap as if the flow had settled, which is only fair if the cars close slowly compared
+to how fast the wake rearranges itself. That ratio is <strong>11.4</strong> — the gap closes about
+eleven times slower than the wake convects — so the quasi-static treatment holds. Had that number
+come out near 1, the claim would have had to be withdrawn.</p>
+
+<p>The effect survives the jump to full 3D with real geometry. Two Ahmed-body cars in tandem:
+leader <strong>2.652</strong>, follower <strong>1.619</strong>, a <strong>39% saving</strong> in three
+dimensions. Side by side in 3D, both read 3.354 — again, worse together than apart.</p>
+
+<figure>
+  <video src="ASSET:site/media/shape_hero_tandem.mp4" autoplay loop muted playsinline></video>
+  <figcaption>The 3D tandem pair. The follower is sitting in a region of slow, recirculating air; the
+  drag it doesn't feel is the drag the leader already paid.</figcaption>
+</figure>
+
+<h3>Why geese fly in a V</h3>
+
+<p>The formation study was deliberately built as a chain of gates, each of which had to pass before
+the next was allowed to run — precisely so that a headline result could not be produced by a
+simulator that was incapable of resolving the effect in the first place.</p>
+
+<p><strong>Gate one, can we measure lift at all?</strong> A single wing at 6° angle of attack gives
+Cl <strong>1.081 ± 0.106</strong>; the same wing level gives <strong>0.125 ± 0.006</strong>. Passed
+(after bug #3 was cleared out of the way).</p>
+
+<p><strong>Gate two, is the mechanism actually there?</strong> Formation flight works because a wing
+leaves behind a pair of counter-rotating tip vortices: air pushed <em>down</em> behind the wing,
+swept <em>up</em> just outboard of each tip. A trailing bird that parks in the upwash gets some of
+its lift for free. Sampled in a plane behind the leader, the wake reads +0.00130 outboard of the low
+tip, +0.00130 outboard of the high tip, and −0.00158 in between. Rising outside, sinking between —
+the exact signature, symmetric to three digits. Passed.</p>
+
+<p><strong>Gate three, does it help?</strong> Only now is the actual question allowed to run.</p>
+
+<div class="tablewrap">
+<table>
+<tr><th>Bird</th><th class="num">Drag Cd</th><th class="num">Lift Cl</th><th class="num">L/D</th><th class="num">vs alone</th></tr>
+<tr><td>flying alone</td><td class="num">2.7202</td><td class="num">1.0663</td><td class="num">0.3920</td><td class="num">—</td></tr>
+<tr><td>leader</td><td class="num">2.7139</td><td class="num">1.0651</td><td class="num">0.3925</td><td class="num">+0.1%</td></tr>
+<tr><td>trailing right</td><td class="num">2.7308</td><td class="num">1.1134</td><td class="num">0.4077</td><td class="num ok">+4.0%</td></tr>
+<tr><td>trailing left</td><td class="num">2.7303</td><td class="num">1.1149</td><td class="num">0.4083</td><td class="num ok">+4.2%</td></tr>
+</table>
+</div>
+
+<p>The trailing birds get about <strong>4% better lift-to-drag</strong> than a bird flying alone, and
+the leader gets nothing — <em>exactly</em> the asymmetry formation-flight theory predicts, and the
+reason real geese rotate the lead position. Two independent checks sit inside that table. The two
+trailing birds are mirror images of each other and their forces are accounted separately, yet they
+agree to <strong>0.15%</strong>. And the improvement comes from the lift column (1.11 vs 1.07), not
+from a drag reduction — which is the physically correct route, since the upwash tilts the local
+airflow rather than sheltering the bird.</p>
+
+<figure>
+  <video src="ASSET:site/media/shape_bird.mp4" autoplay loop muted playsinline></video>
+  <figcaption>Flow past the single bird, the isolated baseline the formation numbers are measured
+  against. Voxelized from a real mesh; the solver sees a 91-cell wingspan.</figcaption>
+</figure>
+
+<h3>The gallery, and the number that is deliberately not a claim</h3>
+
+<div class="fig-row">
+  <figure><video src="ASSET:site/media/shape_car.mp4" autoplay loop muted playsinline></video><figcaption>Race car · Cd 2.41</figcaption></figure>
+  <figure><video src="ASSET:site/media/shape_rocket.mp4" autoplay loop muted playsinline></video><figcaption>Saturn V · Cd 2.16 at Re 109</figcaption></figure>
+  <figure><video src="ASSET:site/media/shape_airplane.mp4" autoplay loop muted playsinline></video><figcaption>Airplane · Cd 2.41, Cl 0.33 at Re 192</figcaption></figure>
+  <figure><video src="ASSET:site/media/shape_ship.mp4" autoplay loop muted playsinline></video><figcaption>Ocean liner · Cd 2.48 at Re 200, fully immersed</figcaption></figure>
+</div>
+
+<figure>
+  <img src="ASSET:out/ahmed_frame.png" alt="Vorticity slice through the flow past an Ahmed body">
+  <figcaption>The Ahmed body — the reference car shape from the 1984 experiments that every
+  automotive CFD code is checked against. Here it reads Cd <strong>2.62</strong> at Reynolds number
+  131. The published experimental value is about 0.30, at Reynolds number 4.3 million.</figcaption>
+</figure>
+
+<p>That gap is not an error, and pretending otherwise would have been the easiest dishonesty
+available all day. A real car meets air at Reynolds number around ten million; these runs are at one
+hundred to a thousand. At those speeds the flow is thick and syrupy relative to the car, the wake is
+laminar rather than turbulent, and the drag coefficient is genuinely much larger. The plan's response
+was to fix the framing rather than the number: the Ahmed drag is <strong>reported, not asserted</strong> —
+it carries its Reynolds number everywhere it appears, on the site and in the README, and the only
+sanity check applied to it is that it lands in a wide 0.2–1.0 laminar band rather than agreeing with
+a wind tunnel it has no business agreeing with. The same rule covers the whole gallery: the wakes,
+the vortex shedding, the recirculation are all real fluid dynamics; the drag numbers are not
+engineering aerodynamics and say so wherever they are displayed.</p>
+
+<div class="fig-row">
+  <figure>
+    <img src="ASSET:out/ising_frame.png" alt="Ising model domains coarsening">
+    <figcaption>Ising model: magnetic domains coarsening near the critical temperature. Measured
+    critical point 0.91% from Onsager's exact answer.</figcaption>
+  </figure>
+  <figure>
+    <img src="ASSET:out/nbody_frame.png" alt="Two galaxies merging, 20,000 particles">
+    <figcaption>20,002-particle galaxy merger, 1,500 steps, total energy drifting by
+    0.001% — the integrator is honest.</figcaption>
+  </figure>
+</div>
+
+<h2><span class="num">05</span> The design decisions, and why</h2>
+
+<figure>
+  <img src="ASSET:docs/journey-assets/site_lab.png" alt="The live laboratory section of the site, showing two cars drafting">
+  <figcaption><strong>The deliverable the whole project was pointed at.</strong> The live lab, running
+  the two-car drafting preset in the browser at step 15,006 — vorticity in a diverging blue–red map
+  with a neutral zero, the two cars draggable with the mouse, and the drag saving shown as one large
+  number in measurement red. Every control on the right is live; the caption under the test section
+  states the actual τ and inflow speed the solver is using.</figcaption>
+</figure>
+
+<p>Almost none of these were forced by the physics. They were choices with alternatives, and each one
+was made for a reason that can be stated in a sentence.</p>
+
+<h3>The solver</h3>
+
+<p><strong>One solver, not two.</strong> The obvious way to get 2D and 3D is to write a 2D code and
+then a 3D one. Instead there is a single BGK solver driven by a lattice descriptor object — D2Q9
+plugged in for 2D, D3Q19 for 3D — so both dimensions execute the same collide, stream, boundary and
+force code. The payoff is that the 3D validation is real validation: when the 3D Poiseuille test
+passes, it is testing the same lines that the 2D one already proved, so a divergence between "the 2D
+code" and "the 3D code" cannot exist. Two codebases would have doubled the surface area for exactly
+the kind of silent numerical error the day was organized against.</p>
+
+<p><strong>Half-way bounce-back with exact Ladd pairing.</strong> Not chosen up front — extracted
+from bug #1. The naive full-way formula is simpler and reads correctly; it also over-counts by 2.18×.
+The half-way scheme is the one that satisfies an exact identity (wall drag equals injected body
+force), which means the choice comes with a free, permanent, seconds-long self-check. Given a
+tie between two schemes, the one that can prove itself wins.</p>
+
+<p><strong>The road moves.</strong> The floor under the cars is a moving wall travelling at the
+inflow speed, rather than a stationary surface. This is the physically correct frame — on a real road
+the car moves and the ground moves with the air relative to it — and it also avoids a floor boundary
+layer that would have crept up and choked the underbody flow, quietly corrupting every drafting
+number. The blind-spot survey flagged this at 06:54; it shipped at 07:40 as commit
+<code>dc45f23</code>.</p>
+
+<p><strong>numpy first, numba only on evidence.</strong> The plan wrote the rule down in advance:
+optimize only if a run is <em>measurably</em> too slow, never on suspicion. At 09:19 the 3D grids
+were measurably too slow, so the per-direction step was fused and optional numba kernels added — 50×
+on 3D grids, about 20 MLUPS. That single intervention is why the three full bird reruns forced by
+bugs #2, #3 and #4 all still fit inside the day. Optimizing earlier would have been guesswork;
+optimizing later would have run out of clock.</p>
+
+<p><strong>An aerodynamic map plus an ODE, instead of moving boundaries.</strong> The expensive,
+"proper" answer to coupled car motion is boundaries that translate through the lattice. The cheap
+answer is to measure drag as a function of gap once, then integrate the cars' equations of motion
+against that measured map. The cheap answer is not just cheaper — it is a stronger result, because
+the catch-up has to <em>emerge</em> from measured aerodynamics rather than being animated. The
+trade-off is an assumption (the flow settles faster than the cars move), so the decision ships with
+its own falsifier printed next to it: the timescale ratio, 11.4. Had that come out near 1, the claim
+would have been withdrawn rather than the caveat softened.</p>
+
+<p><strong>Per-body force accounting by link partition.</strong> Two bodies in one domain need their
+forces separated, which is done by attributing each bounce-back link to the body it touches — with
+its own unit test on two nearby squares, written before any two-body run. It earned its keep twice:
+it is what makes the drafting and formation numbers meaningful, and when the birds accidentally
+overlapped in bug #4 it was the component that screamed, returning drag coefficients of −0.106
+instead of quietly averaging two birds together.</p>
+
+<p><strong>Effective diameter, used consistently.</strong> A cylinder's mask says 20 cells; the
+half-way walls sit half a cell outside, so the flow feels 21. That D+1 is used in <em>both</em> the
+Reynolds number and the drag denominator. Using the mask value in one and the effective value in the
+other is a ~5% error that would have looked like physics.</p>
+
+<h3>The browser engine</h3>
+
+<p><strong>Store deviations, not populations.</strong> The WebGL2 engine runs the same algorithm in
+fragment shaders with ping-pong float textures, but it stores <code>f − w</code> rather than the raw
+distribution <code>f</code>. The raw values sit near a large constant, so in fp32 most of the mantissa
+is spent re-encoding that constant instead of the small physical differences that carry the flow. In
+32-bit arithmetic that is the difference between passing the self-checks and passing them
+approximately.</p>
+
+<p><strong>Refuse rather than fudge.</strong> The engine requires <code>EXT_color_buffer_float</code>.
+On hardware that only offers half precision the animation would still look completely convincing
+while the numbers quietly stopped being trustworthy, so it drops to a labelled "visual-only mode"
+instead. There is also a CPU JavaScript fallback at reduced grid size when WebGL2 is absent
+entirely — slow but honest.</p>
+
+<p><strong>Cross-validation as a button, not a paragraph.</strong> Three golden cases are exported
+from Python as JSON and shipped as data: Taylor–Green for bulk physics, Poiseuille for walls, a small
+cylinder for open boundaries and forces. Each carries its initial state, parameters, step count,
+expected observables and fp32-justified tolerances, and the site's self-check panel runs
+<em>those exact cases</em> in the browser and prints measured against target. "The two engines agree"
+is a claim anyone can re-test in five seconds rather than a sentence they have to believe.</p>
+
+<figure>
+  <img src="ASSET:docs/journey-assets/site_selfchecks.png" alt="The self-check panel with three passing cases">
+  <figcaption><strong>Run live in the browser while writing this page.</strong> Taylor–Green decay
+  1.928e-3 against an analytic target of 1.928e-3 (0.02% error, tolerance 2.5%) with mass drift
+  1.2e-7; Poiseuille max deviation 0.06% against a 2% tolerance; and the cylinder Strouhal at
+  <strong>0.1925 in the browser against 0.1925 from Python</strong> — the two independent engines
+  agreeing to four digits, with the 13.8% blockage stated on the card as the reason the value sits
+  above the unbounded 0.16–0.17.</figcaption>
+</figure>
+
+<p><strong>Two small mechanics that are invisible when right.</strong> Browsers throttle timers in
+background tabs, which would make a self-check silently take forever or appear to hang — so the
+checks yield through a <code>MessageChannel</code> instead, and the live lab pauses while they run so
+they aren't fighting for the same GPU. And moving an obstacle uncovers lattice cells that contain
+nothing; they are refilled at equilibrium in both engines, which is correct but fires a brief
+pressure pop — which is why the force gauges freeze during a drag rather than displaying a spike.</p>
+
+<h3>The site</h3>
+
+<p><strong>No server, no build step, no CDN.</strong> Open <code>index.html</code> in Chrome and it
+works, offline. This is a direct read of who it was for — someone who said plainly "I'm not a website
+designer" — and it also removes an entire class of future breakage. three.js is bundled into
+<code>site/vendor/</code> rather than fetched; the math is local; the videos are ordinary files.</p>
+
+<p><strong>The aesthetic direction is an argument.</strong> The stylesheet's own header states it:
+<em>"mid-century wind-tunnel report meets live instrument bench."</em> That was chosen over the
+default dark-glass dashboard look because this project's entire claim is that the numbers are
+measurements, and a page that looks like an instrument report says so before a word is read. The
+ground is cool drafting paper (<code>#f2f4f2</code>), the rules are ink, and one color —
+measurement red <code>#c43a35</code> — is <em>reserved</em> for live values and needles. That
+reservation is the rule that makes the rest work: red never decorates, so red always means "this
+number is being measured right now."</p>
+
+<p><strong>Numbers get their own typeface.</strong> Georgia for display, system sans for body text,
+Cascadia Mono for every measured value, set in tabular figures. Proportional digits shimmy as they
+update — a drag gauge ticking from 1.19 to 1.21 shouldn't make the layout twitch — and monospaced
+numbers read as instrument output rather than prose.</p>
+
+<p><strong>Colormaps chosen by what the data is, not by taste.</strong> Vorticity and pressure are
+<em>signed</em> — they have a meaningful zero with rotation going both ways — so they get a diverging
+red–blue ramp with a neutral center, where "no rotation" reads as blank paper and the two spin
+directions are visibly opposite. Speed is unsigned and gets a perceptually uniform sequential map
+(viridis or magma). Putting a rainbow on vorticity, or a diverging map on speed, invents structure
+that isn't in the data. Series colors are fixed across the whole site — blue is always the leader,
+orange always the trailing car — so a reader who learns the chart can read the gauges.</p>
+
+<p><strong>The live simulation is the hero.</strong> It sits at the top and it is the largest element
+on the page, because it is the thing that makes someone come back and try another experiment. The
+validated tables and the gallery are underneath it, where they support the claim rather than
+gatekeeping the fun.</p>
+
+<p><strong>Explanations are layered, not simplified.</strong> Every panel opens with two plain
+sentences — drafting is "the trailing car hides from the wind inside the leader's wake, the same
+reason cyclists ride in a paceline" — and expands to the real equations and the measured numbers.
+This was the only way to satisfy two non-negotiables that pull against each other: understandable to
+a non-specialist, and never watered down. Simplification by deletion would have broken the second;
+starting with math would have broken the first.</p>
+
+<p><strong>Guardrails that explain themselves.</strong> The sliders clamp to the genuine feasibility
+region — compressibility error under 1%, relaxation time above 0.55, grid cost — and when the clamp
+bites, the UI says why in one sentence: "higher Reynolds needs a bigger grid — there's no free knob."
+Refusing to display garbage is part of rigor; refusing <em>silently</em> just reads as a broken
+slider.</p>
+
+<p><strong>Accessibility treated as correctness.</strong> <code>prefers-reduced-motion</code> kills
+animation and smooth scrolling, the simulation canvas is focusable and labelled for screen readers,
+muted text meets 4.5:1 contrast, and a pass at 09:47 (<code>91ba21e</code>) fixed mobile overflow and
+raised the muted-ink contrast. A page arguing that it doesn't hide inconvenient things shouldn't hide
+itself from a subset of readers.</p>
+
+<p><strong>Honesty rendered as interface.</strong> The formation preset is labelled "2D analogue"
+because wingtip vortices cannot exist in 2D; each gallery caption states the voxel resolution the
+solver actually saw beneath the smooth model being displayed; every drag coefficient carries its
+Reynolds number; and the self-check panel shows red when something fails instead of quietly not
+rendering. These are design decisions in the strictest sense — they cost screen space and they make
+the results look less impressive, on purpose.</p>
+
+<h2><span class="num">06</span> What the day cost: 14 hours 41 minutes</h2>
+
+<p>From the first recorded message at 06:04 to the last commit at 20:45 is <strong>14 hours 41
+minutes</strong> of wall clock — and wall clock, not tokens and not lines of code, is the honest unit
+for this project. Below is every major piece of work ranked by how much of that clock it consumed,
+measured from the first artifact each one produced to the last.</p>
+
+<div class="tablewrap">
+<table>
+<tr><th class="num">#</th><th>Work</th><th class="num">Elapsed</th><th>Window</th><th>What ate the time</th></tr>
+<tr><td class="num">1</td><td><strong>Bird V-formation study</strong></td><td class="num"><strong>~7h 40m</strong></td><td class="mono">12:20 → 20:03</td><td>Run three times over. Bugs #2, #3 and #4 each invalidated a completed run; the physics itself is maybe 90 minutes of it.</td></tr>
+<tr><td class="num">2</td><td><strong>3D gallery + hero pairs</strong></td><td class="num"><strong>~4h 40m</strong></td><td class="mono">10:09 → 14:51</td><td>Eight production runs (ahmed, car, rocket, airplane, ship, bird, tandem pair, side-by-side pair) at ~30 min each, plus video rendering. Pure background compute.</td></tr>
+<tr><td class="num">3</td><td>Interactive site</td><td class="num">~1h 30m</td><td class="mono">08:48 → 10:17</td><td>Two browser engines, the UI, charts, the a11y pass, and the blank-screenshot fix. The largest block of genuinely interactive work in the day.</td></tr>
+<tr><td class="num">4</td><td>2D production runs</td><td class="num">~1h 10m</td><td class="mono">07:50 → 08:59</td><td>Cylinder Re=20 and Re=100 to statistical convergence, plus the vortex-street video. Background.</td></tr>
+<tr><td class="num">5</td><td>The planning walk</td><td class="num">52m</td><td class="mono">06:08 → 07:00</td><td>Five plan rewrites and the blind-spot survey. Zero code, and the highest-leverage hour of the day.</td></tr>
+<tr><td class="num">6</td><td>Drafting map + dynamics</td><td class="num">~40m</td><td class="mono">09:30 → 10:13</td><td>Seven-gap sweep with two bodies per run, then the equations of motion and the charts.</td></tr>
+<tr><td class="num">7</td><td>2D solver core</td><td class="num">37m</td><td class="mono">07:08 → 07:45</td><td>Lattice, streaming, collision, walls, forces, open boundaries — eight commits, each with its test. The fastest-moving stretch of the day.</td></tr>
+<tr><td class="num">8</td><td>Suite: Ising + N-body</td><td class="num">26m</td><td class="mono">09:29 → 09:55</td><td>Two extra validated simulations, start to finished video, in under half an hour.</td></tr>
+<tr><td class="num">9</td><td>The 50× speedup</td><td class="num">23m</td><td class="mono">08:56 → 09:19</td><td>Fused numpy step plus numba kernels. Paid for itself roughly ten times over in rows 1 and 2.</td></tr>
+<tr><td class="num">10</td><td>Final full test suite</td><td class="num">17m 18s</td><td class="mono">20:14 → 20:31</td><td>Exact, from the run log: 21 passed, 1 xfailed.</td></tr>
+</table>
+</div>
+
+<p>Three things that ranking makes obvious. <strong>The two biggest items are both compute</strong>,
+and both ran in the background costing nothing but time — which is exactly the shape chosen at 06:16,
+when it was established that local compute is free and tokens are not. <strong>The single most
+expensive line item is rework</strong>: the formation study occupies more than half the day almost
+entirely because three axis-and-sign bugs each forced a finished run to be thrown away, which is why
+the project's parting advice to itself is to check geometry cheaply, on masks alone, before spending
+hours of compute. And <strong>the fastest block produced the most code</strong> — the entire
+validated 2D solver core landed in 37 minutes, because every piece had an exact answer to check
+against and none of them needed a long run to find out.</p>
+
+<p>The windows overlap — background jobs ran concurrently with interactive work — so these do not sum
+to 14h41m, and they aren't meant to. Underneath the ranking:</p>
+
+<ul>
+  <li><strong>Three main interactive sessions</strong> — the morning brainstorm (06:04–07:00), the
+  build session (07:05–12:21), and the long afternoon of 3D runs and bug hunts (12:22–20:45) —
+  plus about 37 short helper sessions spun off for single tasks.</li>
+  <li><strong>Three context wipes.</strong> Each one is why <code>HANDOFF.md</code> exists and was
+  rewritten five times during the day: the conversation is disposable, the file is not.</li>
+  <li><strong>~74 human turns</strong> across 5,258 recorded events and 20.7 MB of transcript. Most
+  of the day was not conversation.</li>
+  <li><strong>Most of the clock was compute, not typing.</strong> Two long pipelines ran in the
+  background — the gallery pipeline finished at 14:51, the hero-pair and gate pipeline at 14:05 —
+  and the bird study had to be run three times because of bugs #2, #3, and #4, finishing at 18:08 and
+  again at 20:03. The gaps in the commit log between 10:32 and 12:03, 14:57 and 18:12, and 18:12 and
+  20:36 are almost entirely waiting for physics. The final full test suite alone took
+  <strong>17 minutes 18 seconds</strong>.</li>
+  <li><strong>432 MB</strong> of raw flow-field output in <code>out/</code>, of which the videos and
+  measurement tables are the part anyone will ever look at.</li>
+</ul>
+
+<h3>How the work was actually run</h3>
+
+<p>The method mattered as much as the physics, and it comes down to three habits.</p>
+
+<p><strong>Long jobs never blocked the conversation.</strong> Every production run was launched as a
+background process writing to a log and a <code>.npz</code> file, with a done-marker when it
+finished. That is why rows 1, 2 and 4 of the table above — over thirteen hours of elapsed time
+between them — cost essentially nothing but patience, and why interactive work continued on the site
+while eight 3D runs ground away underneath it. The two pipelines even have their own sentinel files,
+<code>PIPE1_DONE</code> and <code>PIPE2_DONE</code>, so a session that had lost its memory could tell
+at a glance what had finished.</p>
+
+<p><strong>The conversation was treated as disposable and the files as permanent.</strong> Context
+was wiped three times during the day, twice deliberately. What survived each wipe was
+<code>HANDOFF.md</code> at the repository root, rewritten five times as the project's state changed
+(06:59, 09:58, 12:03, 12:20, 20:45) and always answering the same two questions: what is true right
+now, and what is the next thing to do. The 12:03 rewrite exists because the tooling itself restarted
+mid-afternoon and the background pipelines had to be relaunched from scratch — recoverable in minutes
+precisely because the file said what had been running.</p>
+
+<p><strong>Nothing was claimed from a clean exit.</strong> The standing rule for the day was that a
+process finishing successfully proves nothing: progress claims had to be backed by an observed
+effect — test output pasted in, a rendered frame actually opened and looked at, a file size listed, a
+screenshot of the running site. This is not ceremony. Bugs #2 and #3 both produced perfectly clean
+exits, and bug #4's run completed successfully while placing two birds inside each other.</p>
+
+<h2><span class="num">07</span> The honest ledger</h2>
+
+<h4>What was cut</h4>
+<p>True moving-boundary lattice Boltzmann — masks that translate or flap through the lattice, with
+Galilean-corrected bounce-back and cell refill. That is what genuine flapping flight, or cars whose
+relative positions change <em>during</em> a single run, would require. It was declared out of scope
+in the plan before any code was written, and the workarounds were chosen to be honest about what they
+are: drafting dynamics uses a measured aerodynamic map plus an equation of motion rather than moving
+the cars through the fluid, and the birds glide on fixed wings rather than flapping. Both are
+labelled as such on the site.</p>
+
+<h4>What stayed a known limitation</h4>
+<ul>
+  <li><strong>The Reynolds number gap.</strong> Everything here runs at Re ~10²–10³ against a real
+  world at ~10⁷. Stated at the top of the README, the plan, and the site.</li>
+  <li><strong>Blockage.</strong> The cylinder benchmarks sit in a channel with 13.75% blockage, which
+  is why both the drag and the Strouhal number read above their unbounded textbook values. Reported
+  with the number rather than corrected away.</li>
+  <li><strong>The ship has no water surface.</strong> It is simulated fully immersed, in
+  "wind-tunnel mode"; a free surface is a different and much harder variant.</li>
+  <li><strong>The bird runs at Re 57</strong> after the relaxation parameter hit its stability floor —
+  low even by this project's standards, and printed in the run log rather than hidden.</li>
+  <li><strong>One test fails on purpose.</strong> The drafting literature says a trailing car should
+  be back within about 15% of its solo drag by three car lengths; here it is still saving 22%. The
+  pre-mortem anticipated this exact row and named the discriminating check — double the domain, and a
+  bug moves while physics doesn't. It didn't move. Laminar wakes genuinely persist further than
+  turbulent ones, so the test is marked as an <em>expected</em> failure with the reason attached,
+  rather than deleted or padded until it passed. It is the "1 xfailed" in the final
+  <span class="mono">21 passed, 1 xfailed in 17m18s</span>.</li>
+</ul>
+
+<h4>What the honesty protocol forced into the open</h4>
+<p>Three things that a less disciplined day would have buried. The Ahmed drag number, which disagrees
+with the published experiment by a factor of eight and is reported anyway, with its regime. The
+drafting recovery test, which fails and is allowed to keep failing with an explanation. And the bird
+gate, which was designed to be able to stop the headline study entirely — the run log for the failed
+attempt literally reads <span class="mono bad">[gate] FAIL — stop, report honestly</span>. That gate
+fired twice. Both times it was a bug rather than a physical limit, but the only reason we know that
+is that the failure was investigated rather than tuned around.</p>
+
+<h4>What it would take to make this real</h4>
+<p>The gap between this and engineering-grade aerodynamics is not effort, it is three specific
+capabilities, in rough order of how much they would buy:</p>
+<ul>
+  <li><strong>Close the Reynolds gap</strong>, which means a turbulence treatment — a large-eddy
+  model with a subgrid viscosity is the standard route for lattice Boltzmann, and it is what would
+  turn the Ahmed body's 2.62 into a number that can honestly be compared against the wind tunnel's
+  0.30. Everything else here is qualitatively right and quantitatively in the wrong regime; this is
+  the one change that moves the regime.</li>
+  <li><strong>Grid refinement near surfaces.</strong> A uniform lattice spends its cells everywhere
+  equally, which is why a car resolves to about forty cells long and a wing is a few voxels thick.
+  Multi-block or tree-based refinement puts the resolution where the boundary layer is, and would let
+  the same machine simulate a far more detailed geometry at the same cost.</li>
+  <li><strong>Moving boundaries</strong> — the piece cut on purpose at 06:30 and never regretted.
+  With masks that translate through the lattice, with Galilean-corrected bounce-back and proper cell
+  refill, the cars could physically close the gap inside a single run instead of through a measured
+  map plus an equation of motion, and the birds could flap instead of glide.</li>
+</ul>
+<p>None of those is exotic; all three are well-trodden. They are simply not a one-day build, and
+saying so is cheaper than implying otherwise.</p>
+
+<blockquote>The general rules the day produced, now written into the pre-mortem: the force pipeline is
+the first suspect for any drag anomaly, and it has an exact self-check that takes seconds — run it
+first. A steady-but-wrong number is a scale bug; a noisy number is a regime problem. When a tolerance
+fails marginally, vary the grid before touching the physics: numbers that chase the grid are
+discretization, numbers that stay put are bugs. And in 3D, suspect the axis convention before
+anything else.</blockquote>
+
+<hr>
+
+<p class="foot">
+Reconstructed from the repository's own records: 40 commits (<code>1bc20aa</code> 06:59 →
+<code>ff9b4cd</code> 20:45), <code>docs/plans/2026-07-29-lbm-fluid-sim.md</code>,
+<code>docs/pre-mortem.md</code>, the measurement files and run logs in <code>out/</code>, and the
+session transcripts. Videos and figures are the project's own output, embedded directly in this file.
+Mesh credits and licenses: <code>assets/meshes/LICENSES.md</code> and
+<code>site/media/CREDITS.md</code>. Regenerate this page with
+<code>python tools/build_journey.py</code>.
+</p>
+
+</div>
+</body>
+</html>
