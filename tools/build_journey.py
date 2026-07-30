@@ -10,7 +10,9 @@ DST = ROOT / "journey.html"
 
 
 def data_uri(rel):
-    p = ROOT / rel
+    p = (ROOT / rel).resolve()
+    if not p.is_relative_to(ROOT):  # ASSET: paths are repo-relative, never escape it
+        raise ValueError(f"asset outside repo: {rel}")
     mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
     return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
 
