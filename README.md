@@ -9,6 +9,16 @@ Built and checked in **14 hours 41 minutes** of wall clock, in one day.
 
 ---
 
+## See it run — 95 seconds
+
+<video src="https://github.com/az9713/lbm-wind-tunnel/raw/main/docs/demo.mp4" poster="docs/journey-assets/demo_poster.png" width="880" controls muted loop playsinline></video>
+
+<sup>Video not playing? [**Watch it here**](https://github.com/az9713/lbm-wind-tunnel/raw/main/docs/demo.mp4) — or better, [run the thing yourself](https://az9713.github.io/lbm-wind-tunnel/site/).</sup>
+
+[<img src="docs/journey-assets/demo_poster.png" width="880" alt="Side-by-side battle preset: two cars pushing each other apart, both reading Cd 2.30">](https://az9713.github.io/lbm-wind-tunnel/site/)
+
+---
+
 ## Two things to open
 
 | [**The wind tunnel** — live, in your browser](https://az9713.github.io/lbm-wind-tunnel/site/) | [**The journey** — how it was built](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
