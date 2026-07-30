@@ -47,6 +47,18 @@ validation ledger, every one measured, none asserted beyond its regime):
 - `assets/meshes/LICENSES.md` + `site/media/CREDITS.md` — mesh attribution
   (CC-BY items MUST keep attribution wherever published).
 
+## Session-transient scratch (durable record is the committed output)
+- three.js bundle: built with esbuild in a scratch dir —
+  `npm i three@0.160.1; npx esbuild entry.js --bundle --minify --format=iife`
+  with `entry.js` hanging GLTFLoader + OrbitControls off `window`. Durable
+  output is `site/vendor/three-bundle.js` (committed) — only rebuild if that
+  file is lost or three.js needs upgrading.
+- Frame eyeballing: `ffmpeg -y -ss 4 -i out/shape_<name>.mp4 -frames:v 1
+  <scratchpad>/f.png` then read the png. Use an absolute `C:/...` path —
+  an unset shell var silently retargets the write into the Git Bash prefix.
+- No repo `CLAUDE.md`: conventions live in this file plus the plan's
+  honesty protocol. Global user instructions still apply.
+
 ## How to work (essentials)
 - Background runs: `NUMBA_NUM_THREADS=6` per concurrent job (12 cores).
 - Verify by observed effects: read a rendered frame, run the asserts —
