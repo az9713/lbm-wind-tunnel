@@ -20,7 +20,7 @@ flow evolves — all of it computed in the browser, in real time, by the same la
 algorithm the Python engine uses.
 
 ▶️ **[Full 95-second walkthrough](https://az9713.github.io/lbm-wind-tunnel/demo.html)** (1.7 MB) — every preset, the self-checks, and the paint-your-own-obstacle mode.
-🎛️ **[Or just go and drive it yourself](https://az9713.github.io/lbm-wind-tunnel/site/).**
+🎛️ **[Or just go and drive it yourself](https://az9713.github.io/lbm-wind-tunnel/site/).** Try **Race — catch the leader** (map-driven catch-up) and §2 **Run the show** (three-act self-check theater).
 
 ---
 
@@ -29,7 +29,7 @@ algorithm the Python engine uses.
 | [**The wind tunnel** — live, in your browser](https://az9713.github.io/lbm-wind-tunnel/site/) | [**The journey** — how it was built](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
 |:--:|:--:|
 | [<img src="docs/journey-assets/site_lab.png" width="440" alt="The live laboratory: two cars drafting, with live drag gauges">](https://az9713.github.io/lbm-wind-tunnel/site/) | [<img src="docs/journey-assets/readme_journey.png" width="440" alt="The development journey write-up">](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
-| Drag the cars with your mouse and watch the drag gauges respond. Real-time WebGL2 solver, the same algorithm as the Python engine — and a **self-check panel you can press** that makes the browser engine prove itself against the Python results, live. | The full development story: five plan rewrites before any code, the four sign-and-axis bugs that nearly sold three wrong answers, every design decision and why, and where all 14h 41m went. |
+| Drag the cars, run **Race** for map-driven catch-up, or **Run the show** in §2. Real-time WebGL2 solver (same algorithm as Python) with live self-checks against golden cases. | The full development story: five plan rewrites before any code, the four sign-and-axis bugs that nearly sold three wrong answers, every design decision and why, and where all 14h 41m went — plus a 2026-08-01 epilogue for the race/theater MVP. |
 
 Both pages are self-contained — no server, no build step, no internet. Clone the repo
 and open `site/index.html` or `journey.html` in Chrome and they just work.
@@ -138,6 +138,8 @@ line is **rework**. And the fastest block produced the most code — the whole v
 | Cylinder benchmarks | `run_cylinder2d.py` | Re=20 steady Cd in range; Re=100 St=0.1925 |
 | Sphere drag | `tests/` (slow) | Schiller–Naumann Cd=1.09 ± 25% |
 | **Two-car drafting study** | `run_drafting.py`, `dynamics.py` | trailing-car saving vs platoon literature; emergent catch-up |
+| **Live race preset** (map-driven catch-up in the browser) | `site/race.js`, `site/app.js` | JS ODE within ~5% of Python `dynamicsMeta`; headless parity test |
+| **Self-check theater** (§2 sequential show) | `site/selfcheck.js`, `site/app.js` | same three golden tols as individual cards; series plots |
 | **3-bird V-formation study** | `run_birds.py` | gated: lift resolvable → tip-vortex sign pattern → L/D benefit |
 | 3D gallery: race car, Saturn V, airplane, ocean liner, bird | `run_shapes3d.py`, `assets/meshes/` | qualitative + Ahmed-body Cd reported vs 1984 experiment |
 | Suite: Ising model, N-body galaxy merger | `ising.py`, `nbody.py` | Onsager Tc ± 3%; energy drift < 2% |
@@ -163,8 +165,19 @@ python tools/render_gallery.py    # npz -> gallery mp4s
 python tools/export_golden.py     # golden cases -> site
 python tools/build_site_data.py   # results + media -> site
 python tools/build_journey.py     # journey.src.html -> self-contained journey.html
-node tools/test_js_engine.js full # browser engine physics, headless
+node tools/test_js_engine.js full     # browser engine physics, headless (TG + Poiseuille + St)
+node tools/test_dynamics_parity.js    # JS race ODE vs SITE_DATA.dynamicsMeta (~5%)
 ```
+
+### Browser lab (after clone)
+
+```bash
+cd site && python -m http.server 8741   # then open http://localhost:8741
+# Chrome caches app.js — hard-reload (Ctrl+Shift+R) after editing site JS
+```
+
+Presets include **Race — catch the leader** (Start/Pause/Reset; timescale ratio on the HUD).
+§2 has **Run the show** for the three-act self-check theater.
 
 ## Honesty notes (also stated on the site)
 
@@ -179,12 +192,17 @@ node tools/test_js_engine.js full # browser engine physics, headless
 - The ship is fully immersed (wind-tunnel mode) — no free surface.
 - The in-browser engine stores population deviations (f − w) to keep fp32 honest, and
   refuses to fake self-checks on fp16-only GPUs.
+- The **Race** preset is map-driven (measured Cd(gap) + ODE), not full fluid–structure
+  interaction; the timescale ratio on the HUD is the quasi-static validity check.
 - Mesh credits and licenses: `assets/meshes/LICENSES.md`, `site/media/CREDITS.md`
   (CC-BY items must keep attribution wherever published).
 
 ## Docs
 
 - [`journey.html`](journey.html) — the full development story, self-contained
-- [`docs/plans/2026-07-29-lbm-fluid-sim.md`](docs/plans/2026-07-29-lbm-fluid-sim.md) — the spec, including the binding honesty protocol
+- [`HANDOFF.md`](HANDOFF.md) — current state, how to resume, site gotchas
+- [`docs/plans/2026-07-29-lbm-fluid-sim.md`](docs/plans/2026-07-29-lbm-fluid-sim.md) — original day-of-build spec + honesty protocol
+- [`docs/plans/2026-08-01-live-drafting-selfcheck-theater.md`](docs/plans/2026-08-01-live-drafting-selfcheck-theater.md) — race + theater feature plan
+- [`docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md`](docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md) — what shipped vs deferred (2026-08-01)
 - [`docs/pre-mortem.md`](docs/pre-mortem.md) — per-validation-row bug-vs-physics table; four rows confirmed
 - [`docs/2026-07-29-blindspot-pass.md`](docs/2026-07-29-blindspot-pass.md) — the unknown-unknowns survey that shaped the plan

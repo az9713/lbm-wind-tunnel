@@ -6,14 +6,25 @@
 
 ## Current state: COMPLETE + MVP race/theater (2026-08-01)
 
-Original plan requirements met (2026-07-29). 2026-08-01 added browser MVP:
-- **Race preset** — map-driven drafting catch-up (`site/race.js`)
-- **Self-check theater** — sequential three-act show in §2
-- Status: `docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md`
-- Parity: `node tools/test_dynamics_parity.js`
-- Headless: `node tools/test_js_engine.js full`
+Original plan requirements met (2026-07-29). On **2026-08-01** the browser lab
+gained two MVP features (commit `a9f12d4` and follow-ups on `main`):
 
-Full test suite green including slow tests: **21 passed, 1 xfailed in 17m18s**
+| Feature | Where | What it is |
+|---------|--------|------------|
+| **Race — catch the leader** | §1 lab preset | Map-driven ODE (`site/race.js`) using measured Cd(gap) from drafting sweep; silhouettes re-stamp as gap closes; **not** full FSI |
+| **Self-check theater** | §2 | **Run the show** runs Taylor–Green → Poiseuille → cylinder St with captions + series plots; **same tolerances** as the individual cards |
+
+Status detail: `docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md`  
+Feature plan: `docs/plans/2026-08-01-live-drafting-selfcheck-theater.md`
+
+### Headless checks for the new code
+
+```bash
+node tools/test_dynamics_parity.js    # JS ODE vs SITE_DATA.dynamicsMeta (~5%)
+node tools/test_js_engine.js full     # TG + Poiseuille + Strouhal on CPU engine
+```
+
+Full Python suite (unchanged): **21 passed, 1 xfailed in 17m18s**
 (`python -m pytest -q`; the xfail is the 3L drafting-recovery band, xfail by
 design — laminar wakes genuinely persist further than turbulent ones).
 
@@ -36,13 +47,21 @@ validation ledger, every one measured, none asserted beyond its regime):
   (the extension refuses `file://`; the page itself works from `file://`).
   **Chrome caches `app.js` aggressively — after editing site JS, hard-reload
   (ctrl+shift+r); a plain reload silently runs the old file.**
+- Smoke the MVP: preset **Race** → Start → trailer closes → “caught”; §2
+  **Run the show** → three green/red cards. For automation while the tab is
+  occluded, `window.__lab_force_run=true` (turn off before screenshots).
+- Race debug: `window.__lab.raceLive`, `window.__lab.raceMap`, `window.__lab.state`.
 - Regenerate everything via the README pipeline (order matters), then
   `python tools/export_golden.py && PYTHONPATH=. python tools/build_site_data.py`.
 - Explicitly out of scope (unchanged): true moving-boundary LBM — see plan §12f.
+  Also deferred: live bodyForce race, side-by-side race, mesh drop, WebM record
+  (see MVP status doc).
 
 ## Where to read things
 - `README.md` — full run/regeneration pipeline (order matters).
-- `docs/plans/2026-07-29-lbm-fluid-sim.md` — spec; the honesty protocol is binding.
+- `docs/plans/2026-07-29-lbm-fluid-sim.md` — original day-of-build spec; honesty protocol is binding.
+- `docs/plans/2026-08-01-live-drafting-selfcheck-theater.md` — race + theater plan.
+- `docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md` — shipped vs deferred.
 - `docs/pre-mortem.md` — **four rows now CONFIRMED**; three of the four were
   axis/sign confusions in 3D geometry (force-scale over-read, lift-axis swap,
   gate control rotated about the wrong axis, formation placement sign error).
@@ -70,4 +89,4 @@ validation ledger, every one measured, none asserted beyond its regime):
 - Site testing: browser occlusion suspends rAF and throttles timers — the page
   idles when hidden by design; set `window.__lab_force_run=true` in automation
   to force stepping (turn it off before screenshotting — it starves the
-  renderer); `window.__lab` exposes state/render.
+  renderer); `window.__lab` exposes state/render/race handles.

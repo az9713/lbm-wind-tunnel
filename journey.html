@@ -969,14 +969,44 @@ anything else.</blockquote>
 
 <hr>
 
+<h2>Epilogue — 2026-08-01: the headline becomes playable</h2>
+
+<p>Three days after the original one-day build, the live lab gained two features that
+were always implied by the story but not yet interactive:</p>
+
+<ol>
+  <li><strong>Race — catch the leader.</strong> The offline ODE in
+  <code>dynamics.py</code> (measured Cd(gap) from the drafting map, identical
+  engines, trailer reels in) was ported to <code>site/race.js</code> and wired as
+  a lab preset. Silhouettes re-stamp as the gap closes; the flow field visualizes
+  the wake at the current gap. This is <em>map-driven</em> catch-up, not true
+  fluid–structure interaction — the timescale ratio on the HUD is the same
+  quasi-static honesty check the plan required next to every dynamics claim.</li>
+  <li><strong>Self-check theater.</strong> §2 already had three golden-case
+  buttons. <strong>Run the show</strong> plays them as three acts with captions
+  and live series plots (KE decay, Poiseuille profile, Cl history), using the
+  <em>same</em> tolerances as the individual cards — presentation only, never
+  softer pass criteria.</li>
+</ol>
+
+<p>Headless verification: <code>node tools/test_dynamics_parity.js</code> (JS vs
+Python <code>dynamicsMeta</code> within ~5%) and
+<code>node tools/test_js_engine.js full</code> (St = 0.1925). Status and deferred
+v2 items: <code>docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md</code>.</p>
+
+<hr>
+
 <p class="foot">
-Reconstructed from the repository's own records: 40 commits (<code>1bc20aa</code> 06:59 →
-<code>ff9b4cd</code> 20:45), <code>docs/plans/2026-07-29-lbm-fluid-sim.md</code>,
+Reconstructed from the repository's own records: 40 commits on the build day
+(<code>1bc20aa</code> 06:59 → <code>ff9b4cd</code> 20:45), plus the 2026-08-01 site
+MVP on <code>main</code>; <code>docs/plans/2026-07-29-lbm-fluid-sim.md</code>,
+<code>docs/plans/2026-08-01-live-drafting-selfcheck-theater.md</code>,
 <code>docs/pre-mortem.md</code>, the measurement files and run logs in <code>out/</code>, and the
 session transcripts. Videos and figures are the project's own output, embedded directly in this file.
 Mesh credits and licenses: <code>assets/meshes/LICENSES.md</code> and
 <code>site/media/CREDITS.md</code>. Regenerate this page with
-<code>python tools/build_journey.py</code>.
+<code>python tools/build_journey.py</code> (requires embedded media under <code>out/</code> and
+<code>docs/journey-assets/</code>).
 </p>
 
 </div>

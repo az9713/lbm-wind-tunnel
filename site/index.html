@@ -10,7 +10,7 @@
 
 <header class="masthead">
   <div class="masthead-inner">
-    <div class="report-no">Technical report · Lattice-Boltzmann laboratory · 2026-07-29</div>
+    <div class="report-no">Technical report · Lattice-Boltzmann laboratory · 2026-07-29 · site MVP 2026-08-01</div>
     <h1>The Drafting Effect<br><em>and other experiments in a browser wind tunnel</em></h1>
     <p class="dek">
       Why does the second race car catch the first one? Why do geese fly in a V?
@@ -18,6 +18,8 @@
       equations, cross-checked against a validated Python engine — live in your
       browser. Every number on this page traces to a run you can inspect, and
       the checks that prove the physics are a button you can press.
+      Try the <b>Race</b> preset for map-driven catch-up, or §2 <b>Run the show</b>
+      for the three-act self-check theater.
     </p>
     <div class="meta-line">
       <span>Solver: D2Q9 lattice-Boltzmann (BGK)</span>
@@ -419,7 +421,10 @@
       <li>The ship is simulated fully immersed (wind-tunnel mode) — a free
         water surface is a different, much harder simulation.</li>
       <li>Drafting dynamics are quasi-static (aero map + ODE), valid because
-        the printed timescale ratio ≫ 1; cars do not move within a lattice run.</li>
+        the printed timescale ratio ≫ 1; cars do not move within a lattice run.
+        The <b>Race</b> preset uses the same map in the browser — it is
+        map-driven catch-up with visual re-stamp, not true fluid–structure
+        interaction (moving-boundary LBM remains out of scope).</li>
     </ul>
   </div>
 </section>

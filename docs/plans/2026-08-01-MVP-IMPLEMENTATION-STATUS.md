@@ -1,7 +1,7 @@
 # MVP implementation status — race + self-check theater
 
 **Date:** 2026-08-01  
-**Branch target:** `main`  
+**Status:** shipped on `main` (feature commit `a9f12d4`; docs refresh follow)  
 **Plan:** `docs/plans/2026-08-01-live-drafting-selfcheck-theater.md`
 
 ## Implemented (MVP)
@@ -30,12 +30,22 @@
 | Updates §2 cards + validation ledger | Done |
 | `selfcheck.js` returns `series` for theater (backward compatible) | Done |
 
-### Tests run (agent)
-| Command | Expected |
-|---------|----------|
-| `node tools/test_dynamics_parity.js` | all PASS |
+### Documentation (this refresh)
+| Item | Status |
+|------|--------|
+| README What’s here / Running / Docs / honesty note for Race | Done |
+| HANDOFF current state, smoke path, `__lab` race handles | Done |
+| This status file + plan checklist marked shipped | Done |
+| Journey epilogue (2026-08-01) in `docs/journey.src.html` → rebuild `journey.html` | Done |
+| `demo.html` blurb | Done |
+| Site masthead meta line date note | Done |
+
+### Tests run (agent, at ship)
+| Command | Result |
+|---------|--------|
+| `node tools/test_dynamics_parity.js` | all PASS (t_end err ~0.03%, ratio ~11.36) |
 | `node tools/test_js_engine.js fast` | TG + Poiseuille PASS |
-| `node tools/test_js_engine.js full` | + Strouhal PASS (slow) |
+| `node tools/test_js_engine.js full` | + Strouhal St=0.1925 PASS |
 
 ## Not implemented (out of this MVP / deferred)
 
@@ -55,8 +65,6 @@
 3. Preset **Race** → Start → trailer closes → “caught”
 4. §2 **Run the show** → three green/red cards
 
-## Files touched
-- `site/race.js` (new)
-- `site/app.js`, `site/index.html`, `site/style.css`, `site/selfcheck.js`
-- `tools/test_dynamics_parity.js` (new)
-- this status doc
+## Files (feature + docs)
+- Feature: `site/race.js`, `site/app.js`, `site/index.html`, `site/style.css`, `site/selfcheck.js`, `tools/test_dynamics_parity.js`
+- Docs: `README.md`, `HANDOFF.md`, this file, plan file, `docs/journey.src.html` / `journey.html`, `demo.html`

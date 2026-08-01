@@ -1,10 +1,12 @@
 # Implementation plan: Live drafting race + Self-check theater
 
 **Date:** 2026-08-01  
-**Status:** draft  
+**Status:** MVP implemented on `main` (see `2026-08-01-MVP-IMPLEMENTATION-STATUS.md`)  
 **Repo:** this repository (`lbm-wind-tunnel`)  
 **Goal:** Make the README headline playable (#1) and make trust a spectacle (#2), without breaking the honesty protocol.  
 **Non-goals (this pair):** true moving-boundary LBM (plan section 12f), free-surface ship, fake high-Re.
+
+> **Ship note (2026-08-01):** MVP Phases 0–3 are on `main`. Race uses map-driven ODE + visual re-stamp; theater is a §2 enhancement. v2 items remain open.
 
 ---
 
@@ -195,13 +197,13 @@ Phase 4  (optional) Race v1.5 re-stamp throttle + live Cd overlay
 
 ## Done definition (ship checklist)
 
-- [ ] Race preset playable on GPU and CPU fallback
-- [ ] JS dynamics parity check vs Python meta
-- [ ] Timescale ratio always shown in race mode
-- [ ] Theater runs all 3 acts; red/green honest
-- [ ] `node tools/test_js_engine.js full` pass
-- [ ] Manual: hard-reload after JS edits (Chrome cache note in HANDOFF)
-- [ ] README one-liner + optional journey.html footnote only if you want marketing sync
+- [x] Race preset playable on GPU and CPU fallback (same engine bootstrap as other presets)
+- [x] JS dynamics parity check vs Python meta (`tools/test_dynamics_parity.js`)
+- [x] Timescale ratio always shown in race mode
+- [x] Theater runs all 3 acts; red/green honest
+- [x] `node tools/test_js_engine.js full` pass (St = 0.1925)
+- [x] Manual hard-reload note in HANDOFF / README (owner smoke still recommended)
+- [x] README + journey epilogue + HANDOFF + this plan status updated
 
 ---
 
