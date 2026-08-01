@@ -125,12 +125,37 @@
         <div class="preset-row" id="presets" role="group" aria-label="Presets">
           <button class="preset" data-preset="vortex">Vortex street</button>
           <button class="preset" data-preset="drafting">Two cars drafting</button>
+          <button class="preset" data-preset="race">Race — catch the leader</button>
           <button class="preset" data-preset="side">Side-by-side battle</button>
           <button class="preset" data-preset="airplane">Airplane</button>
           <button class="preset" data-preset="birds">Bird formation (2D analogue)</button>
           <button class="preset" data-preset="draw">Design your own</button>
         </div>
         <div class="clamp-note" id="preset-note"></div>
+      </div>
+
+      <div class="ctl-group" id="race-controls" hidden>
+        <h3>Race controls</h3>
+        <p class="plain" style="margin:0 0 8px">
+          Map-driven catch-up from the measured aero map (not full fluid–structure
+          interaction). Same engines, same Cd(gap); cars re-stamp as the gap closes.
+        </p>
+        <div class="run-row">
+          <button id="b-race-start" type="button">Start race</button>
+          <button id="b-race-pause" type="button">Pause</button>
+          <button id="b-race-reset" type="button">Reset to 3L</button>
+        </div>
+        <div class="race-hud" id="race-hud" aria-live="polite">
+          <div><span class="rh-k">gap</span> <span id="race-gap">—</span> L</div>
+          <div><span class="rh-k">t</span> <span id="race-t">—</span></div>
+          <div><span class="rh-k">v trail</span> <span id="race-vt">—</span></div>
+          <div><span class="rh-k">timescale ratio</span> <span id="race-ratio">—</span></div>
+          <div id="race-status" class="race-status">idle</div>
+        </div>
+        <div class="clamp-note" id="race-honesty">
+          Honesty: Cd from the measured gap sweep + ODE. Ratio = t_close / gap₀;
+          ≫ 1 means the quasi-static map is valid.
+        </div>
       </div>
 
       <div class="ctl-group">
@@ -214,7 +239,8 @@
     <div class="chart">
       <div id="chart-probe"></div>
       <div class="figcap"><b>Fig. 3 —</b> Lift coefficient history — the
-        oscillation is vortex shedding; its frequency sets the Strouhal number.</div>
+        oscillation is vortex shedding; its frequency sets the Strouhal number.
+        In <b>Race</b> mode this becomes gap(t).</div>
     </div>
   </div>
 </section>
@@ -230,6 +256,23 @@
     passed these in its test suite; press the buttons to make the browser
     engine prove itself on identical cases, live.
   </p>
+  <div class="theater" id="theater">
+    <div class="theater-head">
+      <h3>Self-check theater</h3>
+      <button id="b-theater" type="button">Run the show</button>
+    </div>
+    <p class="plain" id="theater-caption">
+      One button, three acts: bulk physics → walls → open tunnel + forces.
+      Same tolerances as the cards below — presentation only, never softer.
+    </p>
+    <div class="theater-stage">
+      <div class="theater-act" id="theater-act">Act —</div>
+      <progress id="theater-progress" max="1" value="0"></progress>
+      <div class="chart" id="theater-chart"></div>
+      <div class="theater-log" id="theater-log" aria-live="polite"></div>
+    </div>
+  </div>
+
   <div class="checks" id="checks-grid"></div>
   <details class="info">
     <summary>Why these three cases, and what would failure mean?</summary>
@@ -257,6 +300,7 @@
     the gap between them, measure every force, then let the measured
     aerodynamics drive the cars' motion. The result: the trailing car reels the
     leader in <em>on its own</em> — no scripting, just the wake.
+    <a href="#lab" id="link-play-race">Play the catch-up in the live lab →</a>
   </p>
   <div id="drafting-content"></div>
   <details class="info">
@@ -397,6 +441,7 @@
 <script src="lbm-cpu.js"></script>
 <script src="lbm-gpu.js"></script>
 <script src="selfcheck.js"></script>
+<script src="race.js"></script>
 <script src="vendor/three-bundle.js"></script>
 <script src="app.js"></script>
 </body>

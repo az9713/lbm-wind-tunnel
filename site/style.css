@@ -278,6 +278,62 @@ select, input[type="number"] {
 .check button:hover:enabled { background: var(--paper); }
 .check progress { width: 100%; height: 6px; accent-color: var(--blue); }
 
+/* ---------- race HUD + theater ---------- */
+.race-hud {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+}
+.race-hud .rh-k { color: var(--muted); margin-right: 4px; }
+.race-status {
+  grid-column: 1 / -1;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.race-status.caught { color: var(--good); }
+.race-status.running { color: var(--red); }
+.race-status.warn { color: var(--orange); }
+
+.theater {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.theater-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 6px;
+}
+.theater-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.theater-head button {
+  font-family: var(--mono); font-size: 12.5px; padding: 7px 12px;
+  border: 1px solid var(--rule); background: var(--ink); color: var(--surface);
+  cursor: pointer;
+}
+.theater-head button:hover:enabled { opacity: 0.92; }
+.theater-head button:disabled { opacity: 0.5; cursor: not-allowed; }
+.theater-stage {
+  border-left: 3px solid var(--red);
+  padding: 10px 0 4px 14px;
+  margin-top: 8px;
+}
+.theater-act {
+  font-family: var(--display);
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+.theater progress { width: 100%; height: 8px; accent-color: var(--red); margin-bottom: 10px; }
+.theater-log {
+  font-family: var(--mono); font-size: 12.5px; color: var(--ink-2);
+  white-space: pre-wrap; min-height: 1.5em;
+}
+
 /* ---------- info footnotes ---------- */
 details.info { margin: 6px 0; }
 details.info summary {

@@ -114,11 +114,18 @@
     eng: null, tau: 0.6, nanStrikes: 0,
   };
 
+  /* Map-driven race (site/race.js) — ODE from measured aero map */
+  const raceMap = (window.RaceDynamics && DATA.drafting)
+    ? RaceDynamics.loadMapFromDrafting(DATA.drafting) : null;
+  let raceLive = raceMap ? RaceDynamics.createLive(raceMap, { gap0: 3.0, m: 50 }) : null;
+  // ODE steps per animation frame while racing (nondim t advances ~0.5/frame)
+  const RACE_STEPS_PER_FRAME = 50;
+
   // fp32 GPU stability floor: clean bluff bodies tolerate tau near the BGK
   // edge; the moving-road presets (thin shear layers at sharp wheels) need
   // more headroom.
   function tauMin() {
-    return (state.preset === "drafting") ? 0.58 : 0.552;
+    return (state.preset === "drafting" || state.preset === "race") ? 0.58 : 0.552;
   }
 
   function charSize() {
@@ -147,6 +154,29 @@
   }
 
   /* ---------------- presets ---------------- */
+  function buildTandemCars(gapL) {
+    const o = new Uint8Array(NX * NY);
+    stampBox(o, 0, 0, NX, 2, 1);              // road
+    stampBox(o, 0, NY - 2, NX, 2, 1);         // ceiling (moving, frame-correct)
+    const L = Math.round(NX * 0.16);
+    // keep both cars on-grid: clamp gap so trailer fits
+    const maxGapL = Math.max(0.15, (NX - L * 2 - Math.round(NX * 0.16) - 8) / L);
+    const g = Math.min(Math.max(0.15, gapL), maxGapL);
+    const x0 = Math.round(NX * 0.12);
+    const gapCells = Math.round(g * L);
+    const hA = stampSil(o, SIL.carSide, L, x0, 0, 2);
+    stampSil(o, SIL.carSide, L, x0 + L + gapCells, 0, 3);
+    return {
+      obst: o, open: true, wall: [1],
+      bodies: {
+        2: { kind: "car", L, A: hA - 2, x0, y0: 0 },
+        3: { kind: "car", L, A: hA - 2, x0: x0 + L + gapCells, y0: 0 },
+      },
+      labels: ["leader", "trailing car"],
+      gapUsed: g,
+    };
+  }
+
   const PRESETS = {
     vortex: {
       caption: "Vortex street behind a cylinder — the flow's natural metronome.",
@@ -160,24 +190,13 @@
     drafting: {
       caption: "Two race cars in tandem over a moving road; drag either car.",
       build() {
-        const o = new Uint8Array(NX * NY);
-        stampBox(o, 0, 0, NX, 2, 1);              // road
-        stampBox(o, 0, NY - 2, NX, 2, 1);         // ceiling (moving, frame-correct)
-        const L = Math.round(NX * 0.16);
-        const x0 = Math.round(NX * 0.16);
-        const gapCells = Math.round(state.gap * L);
-        // cars sit sunk 2 cells into the road: wheels merge with the ground,
-        // no unresolvable 1-cell gap channels
-        const hA = stampSil(o, SIL.carSide, L, x0, 0, 2);
-        stampSil(o, SIL.carSide, L, x0 + L + gapCells, 0, 3);
-        return {
-          obst: o, open: true, wall: [1],
-          bodies: {
-            2: { kind: "car", L, A: hA - 2, x0, y0: 0 },
-            3: { kind: "car", L, A: hA - 2, x0: x0 + L + gapCells, y0: 0 },
-          },
-          labels: ["leader", "trailing car"],
-        };
+        return buildTandemCars(state.gap);
+      },
+    },
+    race: {
+      caption: "Map-driven race: trailing car closes from the measured aero map (not full FSI).",
+      build() {
+        return buildTandemCars(state.gap);
       },
     },
     side: {
@@ -246,22 +265,34 @@
     },
   };
 
-  const PRESET_RE = { drafting: 60, side: 80, birds: 80 };
+  const PRESET_RE = { drafting: 60, race: 60, side: 80, birds: 80 };
   function applyPreset(name, keepFlow = false) {
     if (name !== state.preset && PRESET_RE[name]) {
       state.Re = PRESET_RE[name];
       $("s-re").value = state.Re; $("o-re").value = state.Re;
     }
+    // leaving race: pause ODE
+    if (state.preset === "race" && name !== "race" && raceLive) raceLive.pause();
     state.preset = name;
     document.querySelectorAll("#presets .preset").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.preset === name)));
+    if (name === "race" && raceLive) {
+      // sync visual gap to race state (or gap0 on first entry)
+      const snap = raceLive.snapshot();
+      state.gap = snap.gap;
+      $("s-gap").value = state.gap;
+      $("o-gap").value = state.gap.toFixed(2);
+    }
     const p = PRESETS[name].build();
+    if (p.gapUsed !== undefined) state.gap = p.gapUsed;
     state.obst = p.obst;
     state.bodies = p.bodies;
     state.drawMode = !!p.draw;
     $("draw-tools").hidden = !p.draw;
-    $("row-gap").style.display = (name === "drafting" || name === "side") ? "" : "none";
+    $("row-gap").style.display =
+      (name === "drafting" || name === "side" || name === "race") ? "" : "none";
     $("row-size").style.display = (name === "vortex" || p.draw) ? "" : "none";
+    $("race-controls").hidden = name !== "race";
     const gapLabel = p.gapLabel || "Car gap (car lengths)";
     $("row-gap").querySelector("label").firstChild.textContent = gapLabel + " ";
     $("fig1-caption").textContent = PRESETS[name].caption;
@@ -269,9 +300,15 @@
     $("l-cdb").textContent = p.labels[1] ? `Cd — ${p.labels[1]}` : "Cd — body B";
     $("l-cla").textContent = p.labels[0] ? `Cl — ${p.labels[0]}` : "Cl — body A";
     $("g-cdb").style.display = p.labels[1] ? "" : "none";
-    $("g-saving").style.display = (name === "drafting") ? "" : "none";
+    $("g-saving").style.display = (name === "drafting" || name === "race") ? "" : "none";
+    if (name === "race") {
+      $("s-gap").disabled = true; // gap driven by ODE while in race mode
+    } else {
+      $("s-gap").disabled = false;
+    }
     computeTau();
     rebuildEngine(keepFlow, p);
+    if (name === "race") updateRaceHud();
   }
 
   function rebuildEngine(keepFlow, presetInfo) {
@@ -424,7 +461,7 @@
     $("n-cdb").style.left = `${Math.min(97, Math.max(0, (cdB ?? 0) / 4 * 100))}%`;
     $("n-cla").style.left = `${Math.min(97, Math.max(0, ((clA ?? 0) / 4 + 0.5) * 100))}%`;
     $("n-re").style.left = `${Math.min(97, state.Re / 400 * 100)}%`;
-    if (state.preset === "drafting" && cdA && cdB) {
+    if ((state.preset === "drafting" || state.preset === "race") && cdA && cdB) {
       const sv = (1 - cdB / cdA) * 100;
       $("v-saving").textContent = frozen ? "…" : `${sv.toFixed(0)} %`;
       $("v-saving").classList.toggle("neutral", !(sv > 5));
@@ -441,6 +478,29 @@
     // queues GPU work nobody sees (and can congest the GPU process)
     if (document.hidden && !window.__lab_force_run) return;
     if (!state.paused) {
+      // Race ODE advances geometry; LBM still steps for wake visualization
+      if (state.preset === "race" && raceLive) {
+        const before = raceLive.snapshot();
+        if (before.running) {
+          const snap = raceLive.step(RACE_STEPS_PER_FRAME);
+          state.gap = snap.gap;
+          $("o-gap").value = snap.gap.toFixed(2);
+          $("s-gap").value = snap.gap;
+          if (snap.needsRestamp) {
+            raceLive.markStamped();
+            // rebuild obstacles at new gap; keep flow to avoid full cold start
+            const p = PRESETS.race.build();
+            state.obst = p.obst;
+            state.bodies = p.bodies;
+            state.eng.setObstacle((x, y) => state.obst[y * NX + x]);
+            if (p.wall) state.eng.setWallVelocity(1, state.U, 0);
+            // brief freeze so force gauges skip re-stamp pressure pop
+            state.freezeUntil = state.eng.steps + 120;
+          }
+          updateRaceHud(snap);
+          if (snap.caught) updateRaceHud(snap);
+        }
+      }
       const tA = performance.now();
       state.eng.step(state.stepsPerFrame);
       const tB = performance.now();
@@ -460,6 +520,32 @@
         $("meta-fps").textContent = `${Math.round(fpsSmoothed).toLocaleString()} steps/s`;
         lastFrameT = now; frameCount = 0;
       }
+    }
+  }
+
+  function updateRaceHud(snap) {
+    if (!$("race-hud") || !raceLive) return;
+    snap = snap || raceLive.snapshot();
+    $("race-gap").textContent = snap.gap.toFixed(3);
+    $("race-t").textContent = snap.t.toFixed(2);
+    $("race-vt").textContent = snap.vTrailing.toFixed(3);
+    const ratio = snap.timescale_ratio;
+    $("race-ratio").textContent = ratio === null ? "—" :
+      (ratio.toFixed(1) + (ratio < 5 ? " ⚠ weak" : " ≫ 1"));
+    const st = $("race-status");
+    if (snap.caught) {
+      st.textContent = "caught! slipstream held at map floor";
+      st.className = "race-status caught";
+    } else if (snap.running) {
+      st.textContent = "racing — map ODE closing gap";
+      st.className = "race-status running";
+    } else {
+      st.textContent = "idle — press Start race";
+      st.className = "race-status";
+    }
+    if (ratio !== null && ratio < 5 && snap.caught) {
+      st.className = "race-status warn";
+      st.textContent += " (quasi-static assumption weak)";
     }
   }
 
@@ -589,12 +675,26 @@
         { pts: state.cdHist[1].map((v, i) => [i + t0, v]), color: "#eb6834" },
       ],
     });
-    lineChart($("chart-probe"), {
-      yLabel: "Cl",
-      series: [
-        { pts: state.clHist[0].map((v, i) => [i + t0, v]), color: "#2a78d6" },
-      ],
-    });
+    if (state.preset === "race" && raceLive) {
+      const hist = raceLive.snapshot().history;
+      lineChart($("chart-probe"), {
+        yLabel: "gap (L)",
+        series: [
+          {
+            pts: hist.map(h => [h.t, h.gap]),
+            color: "#c43a35",
+            label: "gap(t)",
+          },
+        ],
+      });
+    } else {
+      lineChart($("chart-probe"), {
+        yLabel: "Cl",
+        series: [
+          { pts: state.clHist[0].map((v, i) => [i + t0, v]), color: "#2a78d6" },
+        ],
+      });
+    }
   }
 
   /* ---------------- interaction: sliders ---------------- */
@@ -610,9 +710,14 @@
   bindSlider("s-u", "o-u", "U", () => {
     computeTau();
     state.eng.tau = state.tau; state.eng.u0 = state.U;
-    if (state.preset === "drafting") state.eng.setWallVelocity(1, state.U, 0);
+    if (state.preset === "drafting" || state.preset === "race") {
+      state.eng.setWallVelocity(1, state.U, 0);
+    }
   });
-  bindSlider("s-gap", "o-gap", "gap", () => applyPreset(state.preset));
+  bindSlider("s-gap", "o-gap", "gap", () => {
+    if (state.preset === "race") return; // ODE owns gap
+    applyPreset(state.preset);
+  });
   bindSlider("s-size", "o-size", "size", () => applyPreset(state.preset));
   bindSlider("s-speed", "o-speed", "stepsPerFrame", null);
   bindSlider("s-brush", "o-brush", "brush", null);
@@ -631,6 +736,44 @@
   $("b-reset").addEventListener("click", () => applyPreset(state.preset));
   document.querySelectorAll("#presets .preset").forEach(b =>
     b.addEventListener("click", () => applyPreset(b.dataset.preset)));
+
+  /* ---- race controls ---- */
+  if ($("b-race-start")) {
+    $("b-race-start").addEventListener("click", () => {
+      if (!raceLive) {
+        $("banner").textContent = "Race map missing — SITE_DATA.drafting not loaded.";
+        return;
+      }
+      if (state.preset !== "race") applyPreset("race");
+      raceLive.start();
+      state.paused = false;
+      $("b-pause").textContent = "Pause";
+      updateRaceHud();
+    });
+    $("b-race-pause").addEventListener("click", () => {
+      if (raceLive) raceLive.pause();
+      updateRaceHud();
+    });
+    $("b-race-reset").addEventListener("click", () => {
+      if (!raceLive) return;
+      raceLive.reset();
+      state.gap = 3.0;
+      applyPreset("race");
+      updateRaceHud();
+    });
+  }
+  if ($("link-play-race")) {
+    $("link-play-race").addEventListener("click", (ev) => {
+      ev.preventDefault();
+      applyPreset("race");
+      document.getElementById("lab").scrollIntoView({ behavior: "smooth" });
+      if (raceLive) {
+        raceLive.reset();
+        raceLive.start();
+        updateRaceHud();
+      }
+    });
+  }
 
   /* ---------------- interaction: dragging & drawing ---------------- */
   let dragBody = 0, dragLast = null;
@@ -751,6 +894,52 @@
   ];
   const liveCheckResults = {};
 
+  function applyCheckResult(c, r) {
+    liveCheckResults[c.key] = r;
+    const ok = c.pass(r);
+    const st = $(`st-${c.key}`);
+    if (st) {
+      st.className = "status " + (ok ? "pass" : "fail");
+      st.textContent = ok ? "PASS" : "FAIL — see numbers";
+    }
+    const tb = $(`tb-${c.key}`);
+    if (tb) {
+      tb.innerHTML = c.rows(r)
+        .map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+    }
+    return ok;
+  }
+
+  function renderTheaterSeries(r) {
+    const el = $("theater-chart");
+    if (!el || !r || !r.series || !r.series.pts || !r.series.pts.length) {
+      if (el) el.innerHTML = "";
+      return;
+    }
+    const series = [
+      { pts: r.series.pts, color: "#c43a35", label: r.series.label || "series" },
+    ];
+    if (r.series.ref) {
+      series.push({ pts: r.series.ref, color: "#82878b", label: "analytic" });
+    }
+    lineChart(el, { yLabel: r.series.label || "value", series });
+  }
+
+  async function runOneCheck(c, progressEl) {
+    const bt = $(`bt-${c.key}`), st = $(`st-${c.key}`), pr = $(`pr-${c.key}`);
+    if (bt) bt.disabled = true;
+    if (pr) { pr.hidden = false; pr.value = 0; }
+    if (st) { st.className = "status idle"; st.textContent = "running…"; }
+    const r = await c.run(p => {
+      if (pr) pr.value = p;
+      if (progressEl) progressEl.value = p;
+    });
+    const ok = applyCheckResult(c, r);
+    if (bt) bt.disabled = false;
+    if (pr) pr.hidden = true;
+    return { r, ok };
+  }
+
   function renderChecks() {
     const grid = $("checks-grid");
     grid.innerHTML = "";
@@ -768,25 +957,67 @@
     }
     for (const c of CHECKS) {
       $(`bt-${c.key}`).addEventListener("click", async () => {
-        const bt = $(`bt-${c.key}`), st = $(`st-${c.key}`), pr = $(`pr-${c.key}`);
-        bt.disabled = true; pr.hidden = false;
-        st.className = "status idle"; st.textContent = "running…";
         const wasPaused = state.paused;
-        state.paused = true;               // free GPU + main thread for the check
+        state.paused = true;
         try {
-          const r = await c.run(p => pr.value = p);
-          liveCheckResults[c.key] = r;
-          const ok = c.pass(r);
-          st.className = "status " + (ok ? "pass" : "fail");
-          st.textContent = ok ? "PASS" : "FAIL — see numbers";
-          $(`tb-${c.key}`).innerHTML = c.rows(r)
-            .map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+          await runOneCheck(c);
           renderValidation();
         } catch (e) {
-          st.className = "status fail"; st.textContent = "error: " + e.message;
+          const st = $(`st-${c.key}`);
+          if (st) {
+            st.className = "status fail";
+            st.textContent = "error: " + e.message;
+          }
         }
         state.paused = wasPaused;
-        bt.disabled = false; pr.hidden = true;
+      });
+    }
+
+    /* ---- self-check theater: sequential show ---- */
+    const bTh = $("b-theater");
+    if (bTh) {
+      bTh.addEventListener("click", async () => {
+        bTh.disabled = true;
+        const wasPaused = state.paused;
+        state.paused = true; // free main thread / GPU for checks
+        const acts = [
+          { c: CHECKS[0], title: "Act I — Taylor–Green",
+            line: "Bulk physics only — energy should die at rate 2νk²." },
+          { c: CHECKS[1], title: "Act II — Poiseuille",
+            line: "Walls matter — channel flow must become a parabola." },
+          { c: CHECKS[2], title: "Act III — Cylinder Strouhal",
+            line: "Open tunnel + force — shedding frequency must hit the Python St band." },
+        ];
+        const log = $("theater-log");
+        const actEl = $("theater-act");
+        const pr = $("theater-progress");
+        const lines = [];
+        for (let i = 0; i < acts.length; i++) {
+          const a = acts[i];
+          if (actEl) actEl.textContent = a.title;
+          if ($("theater-caption")) $("theater-caption").textContent = a.line;
+          if (pr) pr.value = 0;
+          lines.push(`${a.title}: running…`);
+          if (log) log.textContent = lines.join("\n");
+          try {
+            const { r, ok } = await runOneCheck(a.c, pr);
+            renderTheaterSeries(r);
+            lines[lines.length - 1] =
+              `${a.title}: ${ok ? "PASS" : "FAIL"} — measured ${
+                typeof r.measured === "number" && Math.abs(r.measured) < 0.01
+                  ? r.measured.toExponential(3)
+                  : (typeof r.measured === "number" ? r.measured.toFixed(4) : r.measured)
+              }`;
+          } catch (e) {
+            lines[lines.length - 1] = `${a.title}: error — ${e.message}`;
+          }
+          if (log) log.textContent = lines.join("\n");
+          if (pr) pr.value = 1;
+        }
+        if (actEl) actEl.textContent = "Curtain — same cards updated above";
+        renderValidation();
+        state.paused = wasPaused;
+        bTh.disabled = false;
       });
     }
   }
@@ -1125,7 +1356,8 @@
   schedule();
   // debug/testing handle (harmless: local page, own data)
   window.__lab = {
-    state, applyPreset, updateGauges, drawLiveCharts,
+    state, applyPreset, updateGauges, drawLiveCharts, updateRaceHud,
+    raceLive, raceMap,
     render: () => engineKind === "gpu" ? drawGpu() : draw(state.eng.computeMoments()),
     checkResults: liveCheckResults,
   };

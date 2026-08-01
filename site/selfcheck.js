@@ -39,6 +39,8 @@ const SelfCheck = (() => {
       measured: rate, target, err, tol: p.tol,
       pass: err < p.tol,
       extra: { massDrift, massPass: massDrift < 1e-5 },
+      // series for theater: kinetic energy samples vs step
+      series: { label: "KE", pts: e.map((ke, i) => [(i + 1) * chunk, ke]) },
     };
   }
 
@@ -63,10 +65,22 @@ const SelfCheck = (() => {
       const ana = 1 - (yc / h) * (yc / h);
       maxDev = Math.max(maxDev, Math.abs(m.ux[y * nx] / uMax - ana));
     }
+    // profile series for theater: normalized u(y) vs analytic parabola
+    const profile = [];
+    for (let y = 1; y < ny - 1; y++) {
+      const yc = y - (ny - 1) / 2;
+      const ana = 1 - (yc / h) * (yc / h);
+      profile.push({ y, u: m.ux[y * nx] / (uMax || 1), ana });
+    }
     return {
       name: "Poiseuille profile",
       measured: maxDev, target: 0, err: maxDev, tol: p.tol,
       pass: maxDev < p.tol,
+      series: {
+        label: "u/u_max",
+        pts: profile.map(p => [p.y, p.u]),
+        ref: profile.map(p => [p.y, p.ana]),
+      },
     };
   }
 
@@ -98,11 +112,16 @@ const SelfCheck = (() => {
       if (progress) { progress(t / steps); await yieldUI(); }
     }
     const st = dominantFreq(cl) / 2 * Deff / U;   // dt = 2 steps per sample
+    // subsample Cl for theater plot (keep ~200 pts)
+    const stride = Math.max(1, (cl.length / 200) | 0);
+    const clPts = [];
+    for (let i = 0; i < cl.length; i += stride) clPts.push([i * 2, cl[i]]);
     return {
       name: "Cylinder Re=100 Strouhal",
       measured: st, target: p.pythonSt ?? 0.165,
       err: null, tol: null, band: p.band,
       pass: st > p.band[0] && st < p.band[1],
+      series: { label: "Cl", pts: clPts },
     };
   }
 

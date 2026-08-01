@@ -4,10 +4,14 @@
 `docs/plans/2026-07-29-lbm-fluid-sim.md`. Debugging doctrine:
 `docs/pre-mortem.md` (consult before touching any red assert).
 
-## Current state: COMPLETE (2026-07-29 ~21:00)
+## Current state: COMPLETE + MVP race/theater (2026-08-01)
 
-All plan requirements are met. No background compute outstanding, working tree
-committed, local repo with NO remote.
+Original plan requirements met (2026-07-29). 2026-08-01 added browser MVP:
+- **Race preset** — map-driven drafting catch-up (`site/race.js`)
+- **Self-check theater** — sequential three-act show in §2
+- Status: `docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md`
+- Parity: `node tools/test_dynamics_parity.js`
+- Headless: `node tools/test_js_engine.js full`
 
 Full test suite green including slow tests: **21 passed, 1 xfailed in 17m18s**
 (`python -m pytest -q`; the xfail is the 3L drafting-recovery band, xfail by
