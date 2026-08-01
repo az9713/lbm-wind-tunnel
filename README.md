@@ -30,7 +30,7 @@ algorithm the Python engine uses.
 | [**The wind tunnel**](https://az9713.github.io/lbm-wind-tunnel/site/) | [**MVP demo — Race + Theater**](https://az9713.github.io/lbm-wind-tunnel/mvp-demo.html) | [**The journey**](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
 |:--:|:--:|:--:|
 | [<img src="docs/journey-assets/site_lab.png" width="360" alt="The live laboratory: two cars drafting, with live drag gauges">](https://az9713.github.io/lbm-wind-tunnel/site/) | [<img src="docs/journey-assets/site_selfchecks.png" width="360" alt="Self-check panel — also available as a configurable theater demo">](https://az9713.github.io/lbm-wind-tunnel/mvp-demo.html) | [<img src="docs/journey-assets/readme_journey.png" width="360" alt="The development journey write-up">](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
-| Full lab: drag cars, all presets, gallery, validation ledger. | Focused playground for the 2026-08-01 features: map-driven race ODE + three-act self-check theater, maximally configurable. | Build story: plan rewrites, axis bugs, 14h 41m, race/theater epilogue. |
+| Full lab: drag cars, all presets, gallery, validation ledger. | Focused playground for the 2026-08-01 features: map-driven race ODE + three-act self-check theater, maximally configurable. Built by the **Grok** agent through **Buzz mobile**, in session with **Buzz Desktop** running at home. | Build story: plan rewrites, axis bugs, 14h 41m, race/theater epilogue. |
 
 All pages are self-contained — no server, no build step, no internet. Clone the repo
 and open `site/index.html`, `mvp-demo.html`, or `journey.html` in Chrome.
