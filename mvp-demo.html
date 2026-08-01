@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MVP Demo — Race + Self-check Theater · LBM Wind Tunnel</title>
+<style>
+:root {
+  --paper: #f2f4f2;
+  --surface: #fcfcfb;
+  --ink: #141a1e;
+  --ink-2: #4c5257;
+  --muted: #666c71;
+  --hair: #dde0dc;
+  --rule: #b9bfba;
+  --red: #c43a35;
+  --blue: #2a78d6;
+  --orange: #eb6834;
+  --good: #0ca30c;
+  --bad: #d03b3b;
+  --display: Georgia, "Times New Roman", serif;
+  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 15px/1.55 var(--body);
+}
+a { color: var(--blue); }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: 2px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+header {
+  border-bottom: 3px double var(--rule); background: var(--surface);
+  padding: 28px 20px 20px; margin: -28px -20px 28px;
+}
+.report-no {
+  font: 12px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2);
+}
+h1 {
+  font: 400 clamp(26px, 4vw, 40px)/1.1 var(--display); margin: 10px 0 8px; max-width: 22ch;
+}
+h1 em { font-style: italic; }
+.dek { color: var(--ink-2); max-width: 62ch; margin: 0 0 12px; font-size: 16px; }
+.nav-links { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 13.5px; }
+.grid {
+  display: grid; grid-template-columns: 1fr; gap: 20px;
+}
+@media (min-width: 960px) {
+  .grid { grid-template-columns: 1fr 1fr; align-items: start; }
+  .grid .span2 { grid-column: 1 / -1; }
+}
+.panel {
+  background: var(--surface); border: 1px solid var(--hair); padding: 16px 16px 18px;
+}
+.panel h2 {
+  font: 600 17px/1.2 var(--body); margin: 0 0 4px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+}
+.panel h2 .tag {
+  font: 11px var(--mono); font-weight: 400; color: var(--muted);
+  border: 1px solid var(--hair); padding: 2px 6px;
+}
+.lede { font-size: 13.5px; color: var(--ink-2); margin: 0 0 14px; }
+.controls {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 12px;
+}
+.controls.three { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 520px) {
+  .controls, .controls.three { grid-template-columns: 1fr; }
+}
+label.ctl {
+  display: flex; flex-direction: column; gap: 3px;
+  font: 11.5px var(--mono); color: var(--muted);
+}
+label.ctl input[type="range"] { width: 100%; accent-color: var(--red); }
+label.ctl input[type="number"], label.ctl select {
+  font: 13px var(--mono); padding: 5px 6px; border: 1px solid var(--rule); background: var(--paper);
+  color: var(--ink);
+}
+label.ctl .row { display: flex; justify-content: space-between; align-items: baseline; }
+label.ctl output { color: var(--ink); font-variant-numeric: tabular-nums; }
+label.check {
+  flex-direction: row; align-items: center; gap: 8px; font: 13px var(--body); color: var(--ink);
+  margin: 2px 0;
+}
+label.check input { accent-color: var(--blue); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+button {
+  font: 12.5px var(--mono); padding: 7px 12px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+button.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+button:hover:enabled { filter: brightness(0.97); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.danger { border-color: color-mix(in srgb, var(--bad) 50%, var(--rule)); color: var(--bad); }
+.hud {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px; font: 12.5px var(--mono); margin-bottom: 12px;
+  padding: 10px; background: var(--paper); border: 1px solid var(--hair);
+}
+.hud div span.k { color: var(--muted); display: block; font-size: 10.5px; margin-bottom: 2px; }
+.hud .big { font-size: 16px; font-variant-numeric: tabular-nums; }
+.status-pill {
+  display: inline-block; font: 11.5px var(--mono); padding: 2px 8px;
+  border: 1px solid var(--hair); background: var(--paper); color: var(--ink-2);
+}
+.status-pill.run { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--hair)); }
+.status-pill.ok { color: #07610a; border-color: color-mix(in srgb, var(--good) 40%, var(--hair)); }
+.status-pill.fail { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--hair)); }
+.canvas-wrap {
+  position: relative; background: #e8ebe8; border: 1px solid var(--hair);
+  aspect-ratio: 16 / 5; overflow: hidden;
+}
+canvas#race-view { width: 100%; height: 100%; display: block; }
+.chart-box {
+  margin-top: 10px; border: 1px solid var(--hair); background: var(--paper);
+  min-height: 160px; position: relative;
+}
+.chart-box svg { display: block; width: 100%; height: auto; }
+.chart-cap { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.log {
+  font: 12px var(--mono); color: var(--ink-2); white-space: pre-wrap;
+  background: var(--paper); border: 1px solid var(--hair); padding: 10px;
+  min-height: 4.5em; max-height: 200px; overflow: auto; margin-top: 10px;
+}
+.act-title {
+  font: 400 18px/1.2 var(--display); margin: 8px 0 6px;
+}
+progress {
+  width: 100%; height: 8px; accent-color: var(--red); margin-bottom: 8px;
+}
+.details {
+  margin-top: 10px; font-size: 13px; color: var(--ink-2);
+}
+.details summary { cursor: pointer; color: var(--blue); }
+.hint {
+  font-size: 12.5px; color: var(--muted); margin-top: 8px;
+  border-left: 2px solid var(--rule); padding-left: 10px;
+}
+footer {
+  margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--hair);
+  font-size: 13px; color: var(--muted);
+}
+.preset-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.preset-chips button { padding: 4px 8px; font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="report-no">LBM Wind Tunnel · MVP feature demo · 2026-08-01</div>
+    <h1>Race + Theater<br><em>interactive, fully configurable</em></h1>
+    <p class="dek">
+      Two new pieces of the browser lab, extracted for hands-on play:
+      <b>map-driven drafting race</b> (measured Cd(gap) + ODE — not full FSI) and
+      <b>self-check theater</b> (same golden tolerances as §2, never softer).
+      Every control below is live; nothing is hard-coded beyond the measured aero map.
+    </p>
+    <div class="nav-links">
+      <a href="site/">Full wind tunnel lab →</a>
+      <a href="demo.html">95s video walkthrough</a>
+      <a href="journey.html">How it was built</a>
+      <a href="https://github.com/az9713/lbm-wind-tunnel">GitHub</a>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- ================= RACE ================= -->
+    <section class="panel" id="race-panel" aria-labelledby="race-h">
+      <h2 id="race-h">A · Live drafting race <span class="tag">map-driven ODE</span></h2>
+      <p class="lede">
+        Identical engines; trailer Cd comes from the measured gap sweep.
+        Watch gap close, timescale ratio, and the Cd(gap) map.
+      </p>
+
+      <div class="preset-chips" role="group" aria-label="Race presets">
+        <button type="button" data-race-preset="python">Match Python (gap₀=3, m=50)</button>
+        <button type="button" data-race-preset="close">Close start (gap₀=1)</button>
+        <button type="button" data-race-preset="heavy">Heavy cars (m=120)</button>
+        <button type="button" data-race-preset="light">Light + fast (m=20)</button>
+      </div>
+
+      <div class="controls three">
+        <label class="ctl"><span class="row">gap₀ (L)<output id="o-gap0">3.00</output></span>
+          <input type="range" id="s-gap0" min="0.3" max="3.5" step="0.05" value="3"></label>
+        <label class="ctl"><span class="row">mass m<output id="o-m">50</output></span>
+          <input type="range" id="s-m" min="5" max="200" step="1" value="50"></label>
+        <label class="ctl"><span class="row">ODE dt<output id="o-dt">0.01</output></span>
+          <input type="range" id="s-dt" min="0.002" max="0.05" step="0.001" value="0.01"></label>
+        <label class="ctl"><span class="row">steps / frame<output id="o-spf">40</output></span>
+          <input type="range" id="s-spf" min="1" max="200" step="1" value="40"></label>
+        <label class="ctl"><span class="row">t_max (cap)<output id="o-tmax">2000</output></span>
+          <input type="range" id="s-tmax" min="50" max="5000" step="50" value="2000"></label>
+        <label class="ctl"><span class="row">viz trail length<output id="o-trail">120</output></span>
+          <input type="range" id="s-trail" min="20" max="400" step="10" value="120"></label>
+      </div>
+
+      <div class="controls">
+        <label class="check"><input type="checkbox" id="c-show-map" checked> Show Cd(gap) map on chart</label>
+        <label class="check"><input type="checkbox" id="c-show-v" checked> Plot speeds vs time</label>
+        <label class="check"><input type="checkbox" id="c-auto-restart"> Loop: auto-reset on catch</label>
+        <label class="check"><input type="checkbox" id="c-log-csv"> Log samples to export buffer</label>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="primary" id="b-start">Start</button>
+        <button type="button" id="b-pause">Pause</button>
+        <button type="button" id="b-step">Step ×1 frame</button>
+        <button type="button" id="b-reset">Reset</button>
+        <button type="button" id="b-export">Export CSV</button>
+      </div>
+
+      <div class="hud" id="race-hud">
+        <div><span class="k">gap</span><span class="big" id="h-gap">—</span></div>
+        <div><span class="k">t</span><span class="big" id="h-t">—</span></div>
+        <div><span class="k">v trail</span><span class="big" id="h-vt">—</span></div>
+        <div><span class="k">Cd trail</span><span class="big" id="h-cd">—</span></div>
+        <div><span class="k">timescale ratio</span><span class="big" id="h-ratio">—</span></div>
+        <div><span class="k">status</span><span class="status-pill" id="h-status">idle</span></div>
+      </div>
+
+      <div class="canvas-wrap" aria-label="Race visualization">
+        <canvas id="race-view" width="960" height="300"></canvas>
+      </div>
+      <div class="chart-box" id="race-chart"></div>
+      <p class="chart-cap"><b>Fig. R1 —</b> gap(t) (red). Optional: speeds and Cd map reference.
+        Ratio = t_close / gap₀; ≫ 1 means quasi-static map is honest.</p>
+      <p class="hint">Honesty: this is the same coupling as offline <code>dynamics.py</code> —
+        measured aero map + ODE, not cars moving inside the lattice each step.</p>
+    </section>
+
+    <!-- ================= THEATER ================= -->
+    <section class="panel" id="theater-panel" aria-labelledby="th-h">
+      <h2 id="th-h">B · Self-check theater <span class="tag">same goldens</span></h2>
+      <p class="lede">
+        Three acts prove the browser engine. Tolerances match the lab §2 cards —
+        you can tighten or loosen them here to explore, not to hide failure.
+      </p>
+
+      <div class="controls">
+        <label class="check"><input type="checkbox" id="act-tg" checked> Act I — Taylor–Green</label>
+        <label class="check"><input type="checkbox" id="act-poi" checked> Act II — Poiseuille</label>
+        <label class="check"><input type="checkbox" id="act-st" checked> Act III — Cylinder St</label>
+        <label class="check"><input type="checkbox" id="c-fast-st"> Fast St (half steps; demo only)</label>
+      </div>
+
+      <details class="details" open>
+        <summary>Golden-case knobs (advanced)</summary>
+        <div class="controls three" style="margin-top:10px">
+          <label class="ctl">TG n
+            <input type="number" id="tg-n" value="64" min="16" max="128" step="8"></label>
+          <label class="ctl">TG tau
+            <input type="number" id="tg-tau" value="0.8" min="0.55" max="1.5" step="0.01"></label>
+          <label class="ctl">TG steps
+            <input type="number" id="tg-steps" value="800" min="100" max="4000" step="50"></label>
+          <label class="ctl">TG tol
+            <input type="number" id="tg-tol" value="0.025" min="0.001" max="0.2" step="0.001"></label>
+          <label class="ctl">Poi steps
+            <input type="number" id="poi-steps" value="8000" min="500" max="40000" step="500"></label>
+          <label class="ctl">Poi tol
+            <input type="number" id="poi-tol" value="0.02" min="0.001" max="0.2" step="0.001"></label>
+          <label class="ctl">St steps
+            <input type="number" id="st-steps" value="30000" min="5000" max="60000" step="1000"></label>
+          <label class="ctl">St band lo
+            <input type="number" id="st-lo" value="0.14" min="0.05" max="0.3" step="0.01"></label>
+          <label class="ctl">St band hi
+            <input type="number" id="st-hi" value="0.20" min="0.1" max="0.4" step="0.01"></label>
+        </div>
+        <p class="hint">Defaults come from <code>site/golden.js</code> (Python export).
+          Strouhal on CPU is slow (~minutes); uncheck Act III or enable “Fast St” for a quicker show.</p>
+      </details>
+
+      <div class="btn-row">
+        <button type="button" class="primary" id="b-theater">Run the show</button>
+        <button type="button" id="b-th-stop" disabled>Cancel</button>
+        <button type="button" id="b-th-reset-knobs">Reset knobs to golden</button>
+      </div>
+
+      <div class="act-title" id="th-act">Curtain closed</div>
+      <progress id="th-progress" max="1" value="0"></progress>
+      <div class="chart-box" id="th-chart"></div>
+      <p class="chart-cap" id="th-cap"><b>Fig. T1 —</b> Act series appears here while a check runs.</p>
+      <div class="log" id="th-log" aria-live="polite">Press “Run the show”.</div>
+    </section>
+
+    <!-- ================= MAP TABLE ================= -->
+    <section class="panel span2" id="map-panel">
+      <h2>C · Measured aero map <span class="tag">SITE_DATA.drafting</span></h2>
+      <p class="lede">Source of truth for the race ODE. Isolated Cd and tandem trailer Cd vs gap (car lengths).</p>
+      <div class="chart-box" id="map-chart" style="min-height:200px"></div>
+      <div class="table-scroll" style="overflow:auto;margin-top:12px">
+        <table id="map-table" style="width:100%;border-collapse:collapse;font:12.5px var(--mono)">
+          <thead><tr style="text-align:left;border-bottom:1px solid var(--rule)">
+            <th style="padding:4px 8px">kind</th><th>param</th><th>car</th><th>Cd</th><th>A</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint" id="map-meta">dynamicsMeta: …</p>
+    </section>
+  </div>
+
+  <footer>
+    Self-contained demo — loads <code>site/data.js</code>, <code>golden.js</code>,
+    <code>lbm-cpu.js</code>, <code>selfcheck.js</code>, <code>race.js</code>.
+    Open via a local server if modules ever block <code>file://</code>; plain scripts work from disk in Chrome.
+    Full lab: <a href="site/">site/index.html</a>.
+  </footer>
+</div>
+
+<script src="site/data.js"></script>
+<script src="site/golden.js"></script>
+<script src="site/lbm-cpu.js"></script>
+<script src="site/selfcheck.js"></script>
+<script src="site/race.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const DATA = window.SITE_DATA || {};
+  const GOLDEN = window.GOLDEN || {};
+  const map = RaceDynamics.loadMapFromDrafting(DATA.drafting);
+  if (!map) {
+    document.body.insertAdjacentHTML("afterbegin",
+      '<p style="padding:20px;color:#c43a35">SITE_DATA.drafting missing — open this file from the repo root.</p>');
+    return;
+  }
+
+  /* ---------- chart util ---------- */
+  function lineChart(el, opts) {
+    const W = 560, H = 200, mL = 44, mB = 28, mT = 12, mR = 12;
+    const series = opts.series || [];
+    const allY = series.flatMap(s => s.pts.map(p => p[1])).filter(Number.isFinite);
+    const allX = series.flatMap(s => s.pts.map(p => p[0])).filter(Number.isFinite);
+    if (!allY.length || !allX.length) {
+      el.innerHTML = '<p style="padding:16px;font:13px var(--mono);color:var(--muted)">no data yet</p>';
+      return;
+    }
+    let y0 = Math.min(...allY), y1 = Math.max(...allY);
+    if (y0 === y1) { y0 -= 1; y1 += 1; }
+    const pad = (y1 - y0) * 0.12; y0 -= pad; y1 += pad;
+    const x0 = Math.min(...allX), x1 = Math.max(...allX) || 1;
+    const sx = v => mL + (v - x0) / (x1 - x0 || 1) * (W - mL - mR);
+    const sy = v => mT + (1 - (v - y0) / (y1 - y0)) * (H - mT - mB);
+    let g = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+    for (let i = 0; i <= 4; i++) {
+      const v = y0 + (y1 - y0) * i / 4, y = sy(v);
+      g += `<line x1="${mL}" x2="${W - mR}" y1="${y}" y2="${y}" stroke="#dde0dc"/>`;
+      g += `<text x="${mL - 4}" y="${y + 3}" text-anchor="end" fill="#666c71" font-size="10" font-family="monospace">${fmt(v)}</text>`;
+    }
+    g += `<text x="${mL}" y="${H - 8}" fill="#666c71" font-size="10" font-family="monospace">${fmt(x0)}</text>`;
+    g += `<text x="${W - mR}" y="${H - 8}" text-anchor="end" fill="#666c71" font-size="10" font-family="monospace">${fmt(x1)}</text>`;
+    for (const s of series) {
+      const d = s.pts.filter(p => Number.isFinite(p[1]))
+        .map((p, i) => `${i ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join("");
+      const dash = s.dash ? ` stroke-dasharray="${s.dash}"` : "";
+      g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}"${dash}/>`;
+    }
+    g += `</svg>`;
+    el.innerHTML = g;
+  }
+  function fmt(v) {
+    const a = Math.abs(v);
+    if (a >= 100) return v.toFixed(0);
+    if (a >= 10) return v.toFixed(1);
+    if (a >= 1) return v.toFixed(2);
+    return v.toFixed(3);
+  }
+
+  /* ---------- race state ---------- */
+  const raceCfg = {
+    gap0: 3, m: 50, dt: 0.01, spf: 40, tMax: 2000, trail: 120,
+    showMap: true, showV: true, autoRestart: false, logCsv: false,
+  };
+  let live = null;
+  let exportBuf = [];
+  let animId = 0;
+  let runningAnim = false;
+
+  function rebuildLive() {
+    live = RaceDynamics.createLive(map, {
+      gap0: raceCfg.gap0, m: raceCfg.m, dt: raceCfg.dt,
+    });
+    // patch tMax by wrapping step — createLive uses internal loop; we just check t in tick
+    exportBuf = [];
+    updateHud(live.snapshot());
+    drawRace(live.snapshot());
+    drawRaceChart(live.snapshot());
+  }
+
+  function bindRange(id, outId, key, parse = parseFloat) {
+    const el = $(id), out = $(outId);
+    const sync = () => {
+      raceCfg[key] = parse(el.value);
+      out.value = key === "gap0" ? raceCfg[key].toFixed(2)
+        : key === "dt" ? raceCfg[key].toFixed(3)
+        : String(raceCfg[key]);
+    };
+    el.addEventListener("input", () => {
+      sync();
+      if (key === "gap0" || key === "m" || key === "dt") {
+        const wasRun = live && live.snapshot().running;
+        rebuildLive();
+        if (wasRun) { live.start(); startAnim(); }
+      }
+    });
+    sync();
+  }
+  bindRange("s-gap0", "o-gap0", "gap0");
+  bindRange("s-m", "o-m", "m", v => parseInt(v, 10));
+  bindRange("s-dt", "o-dt", "dt");
+  bindRange("s-spf", "o-spf", "spf", v => parseInt(v, 10));
+  bindRange("s-tmax", "o-tmax", "tMax", v => parseInt(v, 10));
+  bindRange("s-trail", "o-trail", "trail", v => parseInt(v, 10));
+
+  $("c-show-map").addEventListener("change", e => { raceCfg.showMap = e.target.checked; if (live) drawRaceChart(live.snapshot()); });
+  $("c-show-v").addEventListener("change", e => { raceCfg.showV = e.target.checked; if (live) drawRaceChart(live.snapshot()); });
+  $("c-auto-restart").addEventListener("change", e => { raceCfg.autoRestart = e.target.checked; });
+  $("c-log-csv").addEventListener("change", e => { raceCfg.logCsv = e.target.checked; });
+
+  document.querySelectorAll("[data-race-preset]").forEach(b => {
+    b.addEventListener("click", () => {
+      const p = b.dataset.racePreset;
+      if (p === "python") { $("s-gap0").value = 3; $("s-m").value = 50; $("s-dt").value = 0.01; }
+      if (p === "close") { $("s-gap0").value = 1; $("s-m").value = 50; }
+      if (p === "heavy") { $("s-m").value = 120; $("s-gap0").value = 3; }
+      if (p === "light") { $("s-m").value = 20; $("s-spf").value = 80; }
+      ["s-gap0", "s-m", "s-dt", "s-spf"].forEach(id => $(id).dispatchEvent(new Event("input")));
+      rebuildLive();
+    });
+  });
+
+  function updateHud(snap) {
+    $("h-gap").textContent = snap.gap.toFixed(3) + " L";
+    $("h-t").textContent = snap.t.toFixed(2);
+    $("h-vt").textContent = snap.vTrailing.toFixed(4);
+    $("h-cd").textContent = snap.cdTrail.toFixed(3);
+    const r = snap.timescale_ratio;
+    $("h-ratio").textContent = r == null ? "—" : r.toFixed(2) + (r < 5 ? " ⚠" : "");
+    const st = $("h-status");
+    if (snap.caught) {
+      st.textContent = "caught"; st.className = "status-pill ok";
+    } else if (snap.running) {
+      st.textContent = "racing"; st.className = "status-pill run";
+    } else {
+      st.textContent = "idle"; st.className = "status-pill";
+    }
+  }
+
+  function drawRace(snap) {
+    const c = $("race-view");
+    const ctx = c.getContext("2d");
+    const W = c.width, H = c.height;
+    ctx.fillStyle = "#e4e7e4";
+    ctx.fillRect(0, 0, W, H);
+    // road
+    const roadY = H * 0.62;
+    ctx.fillStyle = "#2a2e32";
+    ctx.fillRect(0, roadY, W, H - roadY);
+    ctx.strokeStyle = "#f0c040";
+    ctx.setLineDash([12, 10]);
+    ctx.beginPath();
+    ctx.moveTo(0, roadY + 18); ctx.lineTo(W, roadY + 18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // map gap to screen: leader fixed on the right; trailer closes from the left
+    const Lpx = 70;
+    const maxG = Math.max(raceCfg.gap0, map.gaps[map.gaps.length - 1], snap.gap) + 0.5;
+    const scale = (W * 0.55) / (maxG + 2);
+    const xLeader = W * 0.72;
+    const xTrail = xLeader - scale * (snap.gap + 1);
+    const yCar = roadY - 8;
+
+    function car(x, color, label) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, yCar - 22, Lpx, 22);
+      ctx.fillStyle = "#1a1e22";
+      ctx.beginPath();
+      ctx.arc(x + 14, yCar, 6, 0, Math.PI * 2);
+      ctx.arc(x + Lpx - 14, yCar, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "11px system-ui";
+      ctx.fillText(label, x + 8, yCar - 8);
+    }
+    car(xTrail, "#eb6834", "trail");
+    car(xLeader, "#2a78d6", "lead");
+
+    // gap brace
+    ctx.strokeStyle = "#c43a35";
+    ctx.beginPath();
+    const gx0 = xTrail + Lpx, gx1 = xLeader;
+    const gy = yCar - 36;
+    ctx.moveTo(gx0, gy); ctx.lineTo(gx1, gy);
+    ctx.moveTo(gx0, gy - 4); ctx.lineTo(gx0, gy + 4);
+    ctx.moveTo(gx1, gy - 4); ctx.lineTo(gx1, gy + 4);
+    ctx.stroke();
+    ctx.fillStyle = "#c43a35";
+    ctx.font = "12px monospace";
+    ctx.fillText(`gap ${snap.gap.toFixed(2)} L`, (gx0 + gx1) / 2 - 36, gy - 8);
+
+    // wake chevrons behind leader
+    ctx.strokeStyle = "rgba(42,120,214,0.35)";
+    for (let i = 0; i < 5; i++) {
+      const wx = xLeader - 12 - i * 16;
+      ctx.beginPath();
+      ctx.moveTo(wx, yCar - 18); ctx.lineTo(wx - 10, yCar - 8); ctx.lineTo(wx, yCar + 2);
+      ctx.stroke();
+    }
+
+    // history trail dots
+    const hist = snap.history || [];
+    const n = Math.min(hist.length, raceCfg.trail);
+    for (let i = hist.length - n; i < hist.length; i++) {
+      if (i < 0) continue;
+      const g = hist[i].gap;
+      const x = xLeader - scale * (g + 1) + Lpx / 2;
+      ctx.fillStyle = `rgba(196,58,53,${0.15 + 0.6 * (i - (hist.length - n)) / n})`;
+      ctx.beginPath();
+      ctx.arc(x, yCar - 40, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawRaceChart(snap) {
+    const series = [];
+    const hist = snap.history || [];
+    series.push({
+      pts: hist.map(h => [h.t, h.gap]),
+      color: "#c43a35",
+      width: 2.5,
+    });
+    if (raceCfg.showV && hist.length) {
+      series.push({ pts: hist.map(h => [h.t, h.vT]), color: "#eb6834", width: 1.5 });
+      series.push({ pts: hist.map(h => [h.t, h.vL]), color: "#2a78d6", width: 1.5, dash: "4 3" });
+    }
+    // Cd map as static inset series vs gap (scaled onto secondary — skip if confusing)
+    // Instead plot map as separate optional: gap on x for map mode when idle
+    if (raceCfg.showMap && hist.length < 2) {
+      series.push({
+        pts: map.gaps.map((g, i) => [g, map.cdTrail[i]]),
+        color: "#82878b",
+        dash: "5 4",
+        width: 1.5,
+      });
+    }
+    lineChart($("race-chart"), { series });
+  }
+
+  function tick() {
+    if (!runningAnim || !live) return;
+    const snap0 = live.snapshot();
+    if (!snap0.running) {
+      if (snap0.caught && raceCfg.autoRestart) {
+        rebuildLive();
+        live.start();
+      } else {
+        runningAnim = false;
+        return;
+      }
+    }
+    const snap = live.step(raceCfg.spf);
+    if (snap.t >= raceCfg.tMax) {
+      live.pause();
+      snap.running = false;
+    }
+    if (raceCfg.logCsv && snap.history.length) {
+      const last = snap.history[snap.history.length - 1];
+      exportBuf.push(last);
+    }
+    updateHud(snap);
+    drawRace(snap);
+    drawRaceChart(snap);
+    if (snap.caught && raceCfg.autoRestart) {
+      // brief hold then restart next frame
+    }
+    animId = requestAnimationFrame(tick);
+  }
+  function startAnim() {
+    if (runningAnim) return;
+    runningAnim = true;
+    animId = requestAnimationFrame(tick);
+  }
+  function stopAnim() {
+    runningAnim = false;
+    cancelAnimationFrame(animId);
+  }
+
+  $("b-start").addEventListener("click", () => {
+    if (!live) rebuildLive();
+    live.start();
+    startAnim();
+    updateHud(live.snapshot());
+  });
+  $("b-pause").addEventListener("click", () => {
+    if (live) live.pause();
+    stopAnim();
+    if (live) updateHud(live.snapshot());
+  });
+  $("b-step").addEventListener("click", () => {
+    if (!live) rebuildLive();
+    if (!live.snapshot().running) live.start();
+    const snap = live.step(raceCfg.spf);
+    updateHud(snap); drawRace(snap); drawRaceChart(snap);
+    live.pause();
+  });
+  $("b-reset").addEventListener("click", () => {
+    stopAnim();
+    rebuildLive();
+  });
+  $("b-export").addEventListener("click", () => {
+    const hist = (live && live.snapshot().history) || exportBuf;
+    if (!hist.length) { alert("No samples yet — run a race first."); return; }
+    const lines = ["t,gap,v_leader,v_trailing"];
+    for (const h of hist) {
+      lines.push([h.t, h.gap, h.vL, h.vT].join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "race_history.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  /* ---------- map panel ---------- */
+  function renderMap() {
+    const series = [
+      { pts: map.gaps.map((g, i) => [g, map.cdTrail[i]]), color: "#c43a35", width: 2.5 },
+      { pts: [[map.gaps[0], map.cdIso], [map.gaps[map.gaps.length - 1], map.cdIso]], color: "#82878b", dash: "5 4", width: 1.5 },
+    ];
+    lineChart($("map-chart"), { series });
+    const tb = $("map-table").querySelector("tbody");
+    tb.innerHTML = "";
+    for (const row of (DATA.drafting || [])) {
+      if (row.kind === "side") continue;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td style="padding:3px 8px">${row.kind}</td><td>${row.param}</td><td>${row.car}</td><td>${row.Cd}</td><td>${row.A || ""}</td>`;
+      tb.appendChild(tr);
+    }
+    const meta = DATA.dynamicsMeta || {};
+    $("map-meta").textContent =
+      `dynamicsMeta: caught=${meta.caught} t_end=${meta.t_end?.toFixed?.(2) ?? meta.t_end} ` +
+      `ratio=${meta.timescale_ratio?.toFixed?.(2) ?? meta.timescale_ratio} gap_end=${meta.gap_end?.toFixed?.(3) ?? meta.gap_end} · ` +
+      `map Cd_iso=${map.cdIso.toFixed(3)} gaps=[${map.gaps.join(", ")}]`;
+  }
+
+  /* ---------- theater ---------- */
+  let theaterCancel = false;
+  const makeEngine = (nx, ny, opts) => new LBM.CpuEngine(nx, ny, opts);
+
+  function goldenParams() {
+    const g = GOLDEN;
+    const tg = {
+      n: +$("tg-n").value, tau: +$("tg-tau").value, u0: g.taylorGreen?.u0 ?? 0.03,
+      steps: +$("tg-steps").value, tol: +$("tg-tol").value,
+    };
+    const poi = {
+      nx: g.poiseuille?.nx ?? 8, ny: g.poiseuille?.ny ?? 33,
+      tau: g.poiseuille?.tau ?? 0.9, g: g.poiseuille?.g ?? 1e-6,
+      steps: +$("poi-steps").value, tol: +$("poi-tol").value,
+    };
+    let stSteps = +$("st-steps").value;
+    if ($("c-fast-st").checked) stSteps = Math.max(8000, (stSteps / 2) | 0);
+    const st = {
+      nx: g.strouhal?.nx ?? 400, ny: g.strouhal?.ny ?? 160,
+      D: g.strouhal?.D ?? 20, Deff: g.strouhal?.Deff ?? 22,
+      U: g.strouhal?.U ?? 0.08, Re: g.strouhal?.Re ?? 100,
+      steps: stSteps, warmup: g.strouhal?.warmup ?? 10000,
+      band: [+$("st-lo").value, +$("st-hi").value],
+      pythonSt: g.strouhal?.pythonSt,
+    };
+    return { tg, poi, st };
+  }
+
+  function resetKnobs() {
+    const g = GOLDEN;
+    if (g.taylorGreen) {
+      $("tg-n").value = g.taylorGreen.n;
+      $("tg-tau").value = g.taylorGreen.tau;
+      $("tg-steps").value = g.taylorGreen.steps;
+      $("tg-tol").value = g.taylorGreen.tol;
+    }
+    if (g.poiseuille) {
+      $("poi-steps").value = g.poiseuille.steps;
+      $("poi-tol").value = g.poiseuille.tol;
+    }
+    if (g.strouhal) {
+      $("st-steps").value = g.strouhal.steps;
+      $("st-lo").value = g.strouhal.band[0];
+      $("st-hi").value = g.strouhal.band[1];
+    }
+  }
+  $("b-th-reset-knobs").addEventListener("click", resetKnobs);
+
+  function drawTheaterSeries(r) {
+    if (!r || !r.series || !r.series.pts) {
+      $("th-chart").innerHTML = "";
+      return;
+    }
+    const series = [{ pts: r.series.pts, color: "#c43a35", width: 2 }];
+    if (r.series.ref) series.push({ pts: r.series.ref, color: "#82878b", dash: "4 3", width: 1.5 });
+    lineChart($("th-chart"), { series });
+    $("th-cap").innerHTML = `<b>Fig. T1 —</b> ${r.series.label || "series"} for <em>${r.name}</em>`;
+  }
+
+  async function runTheater() {
+    theaterCancel = false;
+    $("b-theater").disabled = true;
+    $("b-th-stop").disabled = false;
+    const p = goldenParams();
+    const acts = [];
+    if ($("act-tg").checked) {
+      acts.push({
+        title: "Act I — Taylor–Green",
+        line: "Bulk physics: KE dies at rate 2νk².",
+        run: (prog) => SelfCheck.taylorGreen(makeEngine, p.tg, prog),
+        pass: r => r.pass && r.extra?.massPass !== false,
+      });
+    }
+    if ($("act-poi").checked) {
+      acts.push({
+        title: "Act II — Poiseuille",
+        line: "Walls: channel profile → parabola.",
+        run: (prog) => SelfCheck.poiseuille(makeEngine, p.poi, prog),
+        pass: r => r.pass,
+      });
+    }
+    if ($("act-st").checked) {
+      acts.push({
+        title: "Act III — Cylinder Strouhal",
+        line: "Open tunnel + forces: St in band (CPU may take a few minutes).",
+        run: (prog) => SelfCheck.strouhal(makeEngine, p.st, prog),
+        pass: r => r.pass,
+      });
+    }
+    if (!acts.length) {
+      $("th-log").textContent = "Select at least one act.";
+      $("b-theater").disabled = false;
+      $("b-th-stop").disabled = true;
+      return;
+    }
+    const log = [];
+    for (const a of acts) {
+      if (theaterCancel) { log.push("Cancelled."); break; }
+      $("th-act").textContent = a.title;
+      $("th-progress").value = 0;
+      log.push(`${a.title}: running… (${a.line})`);
+      $("th-log").textContent = log.join("\n");
+      try {
+        const r = await a.run(frac => {
+          if (theaterCancel) throw new Error("cancelled");
+          $("th-progress").value = frac;
+        });
+        drawTheaterSeries(r);
+        const ok = a.pass(r);
+        const meas = typeof r.measured === "number"
+          ? (Math.abs(r.measured) < 0.01 ? r.measured.toExponential(3) : r.measured.toFixed(4))
+          : r.measured;
+        log[log.length - 1] = `${a.title}: ${ok ? "PASS" : "FAIL"} measured=${meas}` +
+          (r.target != null ? ` target=${typeof r.target === "number" ? r.target.toExponential?.(3) ?? r.target : r.target}` : "") +
+          (r.band ? ` band=[${r.band}]` : "");
+      } catch (e) {
+        log[log.length - 1] = `${a.title}: ${e.message === "cancelled" ? "cancelled" : "error: " + e.message}`;
+        if (e.message === "cancelled") break;
+      }
+      $("th-log").textContent = log.join("\n");
+      $("th-progress").value = 1;
+    }
+    $("th-act").textContent = theaterCancel ? "Cancelled" : "Curtain — show complete";
+    $("b-theater").disabled = false;
+    $("b-th-stop").disabled = true;
+  }
+
+  $("b-theater").addEventListener("click", () => runTheater());
+  $("b-th-stop").addEventListener("click", () => { theaterCancel = true; });
+
+  /* boot */
+  rebuildLive();
+  renderMap();
+  resetKnobs();
+})();
+</script>
+</body>
+</html>

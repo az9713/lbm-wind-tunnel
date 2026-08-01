@@ -20,19 +20,20 @@ flow evolves — all of it computed in the browser, in real time, by the same la
 algorithm the Python engine uses.
 
 ▶️ **[Full 95-second walkthrough](https://az9713.github.io/lbm-wind-tunnel/demo.html)** (1.7 MB) — every preset, the self-checks, and the paint-your-own-obstacle mode.
-🎛️ **[Or just go and drive it yourself](https://az9713.github.io/lbm-wind-tunnel/site/).** Try **Race — catch the leader** (map-driven catch-up) and §2 **Run the show** (three-act self-check theater).
+🎛️ **[Or just go and drive it yourself](https://az9713.github.io/lbm-wind-tunnel/site/).**  
+🧪 **[New: Race + Theater MVP demo](https://az9713.github.io/lbm-wind-tunnel/mvp-demo.html)** — interactive, every knob exposed (gap₀, mass, ODE dt, golden tols, which acts to run, CSV export).
 
 ---
 
-## Two things to open
+## Three things to open
 
-| [**The wind tunnel** — live, in your browser](https://az9713.github.io/lbm-wind-tunnel/site/) | [**The journey** — how it was built](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
-|:--:|:--:|
-| [<img src="docs/journey-assets/site_lab.png" width="440" alt="The live laboratory: two cars drafting, with live drag gauges">](https://az9713.github.io/lbm-wind-tunnel/site/) | [<img src="docs/journey-assets/readme_journey.png" width="440" alt="The development journey write-up">](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
-| Drag the cars, run **Race** for map-driven catch-up, or **Run the show** in §2. Real-time WebGL2 solver (same algorithm as Python) with live self-checks against golden cases. | The full development story: five plan rewrites before any code, the four sign-and-axis bugs that nearly sold three wrong answers, every design decision and why, and where all 14h 41m went — plus a 2026-08-01 epilogue for the race/theater MVP. |
+| [**The wind tunnel**](https://az9713.github.io/lbm-wind-tunnel/site/) | [**MVP demo — Race + Theater**](https://az9713.github.io/lbm-wind-tunnel/mvp-demo.html) | [**The journey**](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
+|:--:|:--:|:--:|
+| [<img src="docs/journey-assets/site_lab.png" width="360" alt="The live laboratory: two cars drafting, with live drag gauges">](https://az9713.github.io/lbm-wind-tunnel/site/) | [<img src="docs/journey-assets/site_selfchecks.png" width="360" alt="Self-check panel — also available as a configurable theater demo">](https://az9713.github.io/lbm-wind-tunnel/mvp-demo.html) | [<img src="docs/journey-assets/readme_journey.png" width="360" alt="The development journey write-up">](https://az9713.github.io/lbm-wind-tunnel/journey.html) |
+| Full lab: drag cars, all presets, gallery, validation ledger. | Focused playground for the 2026-08-01 features: map-driven race ODE + three-act self-check theater, maximally configurable. | Build story: plan rewrites, axis bugs, 14h 41m, race/theater epilogue. |
 
-Both pages are self-contained — no server, no build step, no internet. Clone the repo
-and open `site/index.html` or `journey.html` in Chrome and they just work.
+All pages are self-contained — no server, no build step, no internet. Clone the repo
+and open `site/index.html`, `mvp-demo.html`, or `journey.html` in Chrome.
 
 ---
 
@@ -140,6 +141,7 @@ line is **rework**. And the fastest block produced the most code — the whole v
 | **Two-car drafting study** | `run_drafting.py`, `dynamics.py` | trailing-car saving vs platoon literature; emergent catch-up |
 | **Live race preset** (map-driven catch-up in the browser) | `site/race.js`, `site/app.js` | JS ODE within ~5% of Python `dynamicsMeta`; headless parity test |
 | **Self-check theater** (§2 sequential show) | `site/selfcheck.js`, `site/app.js` | same three golden tols as individual cards; series plots |
+| **MVP interactive demo page** | `mvp-demo.html` | configurable race + theater playground (README-linked) |
 | **3-bird V-formation study** | `run_birds.py` | gated: lift resolvable → tip-vortex sign pattern → L/D benefit |
 | 3D gallery: race car, Saturn V, airplane, ocean liner, bird | `run_shapes3d.py`, `assets/meshes/` | qualitative + Ahmed-body Cd reported vs 1984 experiment |
 | Suite: Ising model, N-body galaxy merger | `ising.py`, `nbody.py` | Onsager Tc ± 3%; energy drift < 2% |

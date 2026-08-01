@@ -13,6 +13,7 @@ gained two MVP features (commit `a9f12d4` and follow-ups on `main`):
 |---------|--------|------------|
 | **Race — catch the leader** | §1 lab preset | Map-driven ODE (`site/race.js`) using measured Cd(gap) from drafting sweep; silhouettes re-stamp as gap closes; **not** full FSI |
 | **Self-check theater** | §2 | **Run the show** runs Taylor–Green → Poiseuille → cylinder St with captions + series plots; **same tolerances** as the individual cards |
+| **MVP demo page** | `mvp-demo.html` (repo root, README-linked) | Standalone interactive playground: all race knobs + theater act selection + golden overrides + CSV export |
 
 Status detail: `docs/plans/2026-08-01-MVP-IMPLEMENTATION-STATUS.md`  
 Feature plan: `docs/plans/2026-08-01-live-drafting-selfcheck-theater.md`
